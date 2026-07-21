@@ -1,0 +1,27 @@
+<resources>
+    <string name="app_name">خرج‌نگار</string>
+    <string name="setup_language">زبان را انتخاب کنید</string>
+    <string name="setup_theme">پوسته را انتخاب کنید</string>
+    <string name="setup_period">شروع دوره</string>
+    <string name="english">انگلیسی</string>
+    <string name="persian">فارسی</string>
+    <string name="system_theme">خودکار</string>
+    <string name="light_theme">روشن</string>
+    <string name="dark_theme">تاریک</string>
+    <string name="continue_label">ادامه</string>
+    <string name="done">تمام</string>
+    <string name="dashboard">داشبورد</string>
+    <string name="this_period">این دوره</string>
+    <string name="uncategorized">بدون دسته</string>
+    <string name="categories">دسته‌ها</string>
+    <string name="history">دوره‌های قبلی</string>
+    <string name="settings">تنظیمات</string>
+    <string name="daily">روزانه</string>
+    <string name="weekly">هفتگی</string>
+    <string name="period">دوره</string>
+    <string name="add_expense">افزودن خرج</string>
+    <string name="amount">مبلغ</string>
+    <string name="description">توضیح</string>
+    <string name="save">ذخیره</string>
+    <string name="sms_permission">دسترسی پیامک باعث می‌شود خریدهای بانکی به عنوان خرج بدون دسته ذخیره شوند.</string>
+</resources>

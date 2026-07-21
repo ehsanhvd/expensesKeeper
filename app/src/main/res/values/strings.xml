@@ -1,0 +1,27 @@
+<resources>
+    <string name="app_name">ExpenseKeeper</string>
+    <string name="setup_language">Choose language</string>
+    <string name="setup_theme">Choose theme</string>
+    <string name="setup_period">Start of period</string>
+    <string name="english">English</string>
+    <string name="persian">Persian</string>
+    <string name="system_theme">System</string>
+    <string name="light_theme">Light</string>
+    <string name="dark_theme">Dark</string>
+    <string name="continue_label">Continue</string>
+    <string name="done">Done</string>
+    <string name="dashboard">Dashboard</string>
+    <string name="this_period">This period</string>
+    <string name="uncategorized">Uncategorized</string>
+    <string name="categories">Categories</string>
+    <string name="history">History</string>
+    <string name="settings">Settings</string>
+    <string name="daily">Daily</string>
+    <string name="weekly">Weekly</string>
+    <string name="period">Period</string>
+    <string name="add_expense">Add expense</string>
+    <string name="amount">Amount</string>
+    <string name="description">Description</string>
+    <string name="save">Save</string>
+    <string name="sms_permission">SMS permission lets the app save bank purchase messages as uncategorized expenses.</string>
+</resources>
