@@ -818,7 +818,6 @@ public class MainActivity extends Activity {
                 startMonth += 12;
                 startYear--;
             }
-            int labelMonth = JalaliDate.nextMonth(startMonth);
             long start = JalaliDate.toMillisStartOfDay(startYear, startMonth, Math.min(store.periodStartDay(), JalaliDate.daysInMonth(startYear, startMonth)));
             int endMonth = startMonth + 1;
             int endYear = startYear;
@@ -831,13 +830,13 @@ public class MainActivity extends Activity {
             long total = 0;
             for (long value : totals.values()) total += value;
             if (total == 0) continue;
+            String label = JalaliDate.periodLabel(fa, startYear, startMonth, store.periodStartDay()) + " " + ExpenseStore.localNumber(JalaliDate.periodLabelYear(startYear, startMonth, store.periodStartDay()), fa);
             LinearLayout card = card();
-            card.addView(title((fa ? JalaliDate.FA_MONTHS[labelMonth - 1] : JalaliDate.EN_MONTHS[labelMonth - 1]) + " " + ExpenseStore.localNumber(startYear, fa), 20));
+            card.addView(title(label, 20));
             card.addView(subtitle(ExpenseStore.money(total, fa)));
             card.addView(new ChartView(this, totals, store.categories(), fa, text, font));
             final long detailStart = start;
             final long detailEnd = end;
-            final String label = (fa ? JalaliDate.FA_MONTHS[labelMonth - 1] : JalaliDate.EN_MONTHS[labelMonth - 1]) + " " + ExpenseStore.localNumber(startYear, fa);
             card.setOnClickListener(v -> showExpenseDetails(label, detailStart, detailEnd));
             root.addView(card);
             visiblePeriods++;

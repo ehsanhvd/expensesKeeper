@@ -100,16 +100,12 @@ public class JalaliDate {
         JalaliDate now = fromMillis(millis);
         int startYear = now.year;
         int startMonth = now.month;
-        int labelMonth;
-        if (now.day >= startDay) {
-            labelMonth = nextMonth(now.month);
-        } else {
+        if (now.day < startDay) {
             startMonth--;
             if (startMonth == 0) {
                 startMonth = 12;
                 startYear--;
             }
-            labelMonth = now.month;
         }
         int safeDay = Math.min(startDay, daysInMonth(startYear, startMonth));
         long start = toMillisStartOfDay(startYear, startMonth, safeDay);
@@ -120,7 +116,22 @@ public class JalaliDate {
             endYear++;
         }
         long end = toMillisStartOfDay(endYear, endMonth, Math.min(startDay, daysInMonth(endYear, endMonth)));
-        return new Period(start, end, labelMonth);
+        return new Period(start, end, startYear, startMonth, startDay);
+    }
+
+    public static String periodLabel(boolean fa, int startYear, int startMonth, int startDay) {
+        String[] months = fa ? FA_MONTHS : EN_MONTHS;
+        int days = daysInMonth(startYear, startMonth);
+        int next = nextMonth(startMonth);
+        if (startDay <= days / 3) return months[startMonth - 1];
+        if (startDay > (days * 2) / 3) return months[next - 1];
+        return months[startMonth - 1] + "-" + months[next - 1];
+    }
+
+    public static int periodLabelYear(int startYear, int startMonth, int startDay) {
+        int days = daysInMonth(startYear, startMonth);
+        if (startDay > (days * 2) / 3 && startMonth == 12) return startYear + 1;
+        return startYear;
     }
 
     public static int nextMonth(int month) {
@@ -145,16 +156,20 @@ public class JalaliDate {
     public static class Period {
         public final long start;
         public final long end;
-        public final int labelMonth;
+        public final int startYear;
+        public final int startMonth;
+        public final int startDay;
 
-        Period(long start, long end, int labelMonth) {
+        Period(long start, long end, int startYear, int startMonth, int startDay) {
             this.start = start;
             this.end = end;
-            this.labelMonth = labelMonth;
+            this.startYear = startYear;
+            this.startMonth = startMonth;
+            this.startDay = startDay;
         }
 
         public String label(boolean fa) {
-            return fa ? FA_MONTHS[labelMonth - 1] : EN_MONTHS[labelMonth - 1];
+            return periodLabel(fa, startYear, startMonth, startDay);
         }
     }
 }
