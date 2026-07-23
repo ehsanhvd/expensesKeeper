@@ -260,18 +260,23 @@ public class MainActivity extends Activity {
         enterScreen(SCREEN_LANGUAGE);
         LinearLayout root = base();
         root.addView(title(getString(R.string.setup_language), 30));
-        root.addView(subtitle("Expense-only tracking. No income, no balance noise."));
-        root.addView(option(getString(R.string.persian), () -> {
+        root.addView(subtitle(fa ? "فقط پیگیری خرج‌ها؛ بدون درآمد، بدون موجودی و بدون شلوغی اضافه." : "Expense-only tracking. No income, no balance noise."));
+        String language = store.language();
+        root.addView(languageOption(getString(R.string.persian), "fa".equals(language), () -> {
             store.setLanguage("fa");
             getIntent().putExtra("show_settings_after_language", store.isConfigured());
             recreate();
         }));
-        root.addView(option(getString(R.string.english), () -> {
+        root.addView(languageOption(getString(R.string.english), "en".equals(language), () -> {
             store.setLanguage("en");
             getIntent().putExtra("show_settings_after_language", store.isConfigured());
             recreate();
         }));
-        if (!fromSettings) root.addView(option(getString(R.string.continue_label), this::showThemeStep));
+        if (!fromSettings) {
+            root.addView(option(getString(R.string.continue_label), this::showThemeStep));
+            root.addView(flexibleSpacer());
+            root.addView(supportedSmsStyles());
+        }
         setContentView(wrap(root));
     }
 
@@ -1579,6 +1584,70 @@ public class MainActivity extends Activity {
             b.setStateListAnimator(null);
         }
         return b;
+    }
+
+    private TextView languageOption(String s, boolean selected, final Runnable action) {
+        TextView b = option((selected ? "✓ " : "") + s, action);
+        if (selected) {
+            b.setTextColor(accent);
+            b.setBackground(rounded(surfaceAlt, dp(24), accent, dp(2)));
+        }
+        return b;
+    }
+
+    private View flexibleSpacer() {
+        View spacer = new View(this);
+        spacer.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+        return spacer;
+    }
+
+    private LinearLayout supportedSmsStyles() {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER);
+        box.setPadding(0, dp(18), 0, 0);
+        LinearLayout.LayoutParams boxLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        boxLp.setMargins(0, dp(14), 0, 0);
+        box.setLayoutParams(boxLp);
+
+        TextView label = subtitle(fa ? "سبک‌های پیامک بانکی پشتیبانی‌شده" : "Supported bank SMS styles");
+        label.setGravity(Gravity.CENTER);
+        label.setPadding(0, 0, 0, dp(10));
+        box.addView(label);
+
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER);
+        row.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
+        row.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        int[] icons = new int[]{
+                R.drawable.bank_karafarin,
+                R.drawable.bank_shahr,
+                R.drawable.bank_saderat,
+                R.drawable.bank_tejarat,
+                R.drawable.bank_eghtesad_novin,
+                R.drawable.bank_keshavarzi,
+                R.drawable.bank_pasargad,
+                R.drawable.bank_resalat
+        };
+        for (int icon : icons) {
+            row.addView(bankIcon(icon));
+        }
+        box.addView(row);
+        return box;
+    }
+
+    private ImageView bankIcon(int resId) {
+        ImageView icon = new ImageView(this);
+        icon.setImageResource(resId);
+        icon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        icon.setAdjustViewBounds(false);
+        icon.setBackground(rounded(surface, dp(18), outline, dp(1)));
+        icon.setPadding(dp(7), dp(7), dp(7), dp(7));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(36), dp(36));
+        lp.setMargins(dp(3), dp(3), dp(3), dp(3));
+        icon.setLayoutParams(lp);
+        return icon;
     }
 
     private TextView smallButton(String s, final Runnable action) {

@@ -15,8 +15,9 @@ public class SmsExpenseReceiver extends BroadcastReceiver {
     private static final String TRANSFER_PREFS = "sms_transfer_guard";
     private static final long TRANSFER_MATCH_WINDOW_MS = 10 * 60 * 1000L;
     private static final Pattern LABELLED_AMOUNT = Pattern.compile("(?m)^\\s*مبلغ\\s*[:：]\\s*([0-9,۰-۹٠-٩]+)");
+    private static final Pattern KEYWORD_AMOUNT = Pattern.compile("(?m)^\\s*(?:مبلغ|برداشت|خرید|خريد|پایانه\\s*فروش|پايانه\\s*فروش)\\s*[:：]?\\s*([+-]?[0-9,۰-۹٠-٩]+-?)\\s*(?:ریال|ريال)?\\s*$");
     private static final Pattern MINUS_AMOUNT = Pattern.compile("(?m)^\\s*-\\s*([0-9,۰-۹٠-٩]+)\\s*$");
-    private static final Pattern SMS_TIME = Pattern.compile("(\\d{2}/\\d{2}/\\d{2}[_\\s]\\d{2}:\\d{2})");
+    private static final Pattern SMS_TIME = Pattern.compile("(\\d{2,4}/\\d{1,2}/\\d{1,2}[_\\s-]+\\d{2}:\\d{2}|\\d{6}[-_\\s]+\\d{2}:\\d{2}|\\d{1,2}/\\d{1,2}[-_\\s]+\\d{2}:\\d{2}|\\d{4}\\s*-\\s*\\d{2}:\\d{2})");
 
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -64,13 +65,18 @@ public class SmsExpenseReceiver extends BroadcastReceiver {
         if (minusMatched) {
             amount = parseNumber(minus.group(1));
         } else {
-            Matcher labelled = LABELLED_AMOUNT.matcher(normalized);
-            if (labelled.find()) amount = parseNumber(labelled.group(1));
+            Matcher keyword = KEYWORD_AMOUNT.matcher(normalized);
+            if (keyword.find()) {
+                amount = parseNumber(keyword.group(1));
+            } else {
+                Matcher labelled = LABELLED_AMOUNT.matcher(normalized);
+                if (labelled.find()) amount = parseNumber(labelled.group(1));
+            }
         }
         if (amount == null) return null;
 
         boolean deposit = normalized.contains("واریز");
-        boolean withdraw = normalized.contains("برداشت") || normalized.contains("خرید") || minusMatched;
+        boolean withdraw = normalized.contains("برداشت") || normalized.contains("خرید") || normalized.contains("پایانه فروش") || minusMatched;
         if (!deposit && !withdraw) return null;
 
         SmsEvent event = new SmsEvent();
@@ -129,11 +135,16 @@ public class SmsExpenseReceiver extends BroadcastReceiver {
     }
 
     private static long parseNumber(String raw) {
-        return Long.parseLong(normalizeDigits(raw).replace(",", "").trim());
+        return Long.parseLong(normalizeDigits(raw).replace(",", "").replace("+", "").replace("-", "").trim());
     }
 
     private static String normalizeText(String s) {
-        return normalizeDigits(s).replace('ي', 'ی').replace('ك', 'ک');
+        return normalizeDigits(s)
+                .replace('ي', 'ی')
+                .replace('ك', 'ک')
+                .replace("خريد", "خرید")
+                .replace("ريال", "ریال")
+                .replace("پايانه", "پایانه");
     }
 
     private static String normalizeDigits(String s) {
