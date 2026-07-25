@@ -18,6 +18,7 @@ public class SmsExpenseReceiver extends BroadcastReceiver {
     private static final Pattern KEYWORD_AMOUNT = Pattern.compile("(?m)^\\s*(?:مبلغ|برداشت|خرید|خريد|پایانه\\s*فروش|پايانه\\s*فروش)\\s*[:：]?\\s*([+-]?[0-9,۰-۹٠-٩]+-?)\\s*(?:ریال|ريال)?\\s*$");
     private static final Pattern MINUS_AMOUNT = Pattern.compile("(?m)^\\s*-\\s*([0-9,۰-۹٠-٩]+)\\s*$");
     private static final Pattern SMS_TIME = Pattern.compile("(\\d{2,4}/\\d{1,2}/\\d{1,2}[_\\s-]+\\d{2}:\\d{2}|\\d{6}[-_\\s]+\\d{2}:\\d{2}|\\d{1,2}/\\d{1,2}[-_\\s]+\\d{2}:\\d{2}|\\d{4}\\s*-\\s*\\d{2}:\\d{2})");
+    private static final Pattern KARAFARIN_PURCHASE_OTP = Pattern.compile("(?ms)^\\s*بانک\\s+کارآفرین\\s*\\R\\s*خرید\\s*\\R\\s*[^\\r\\n]+\\s*\\R\\s*مبلغ\\s*[:：]\\s*[0-9,۰-۹٠-٩]+\\s*\\R\\s*رمز\\s*[:：]");
 
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -59,6 +60,7 @@ public class SmsExpenseReceiver extends BroadcastReceiver {
 
     private static SmsEvent parseSmsEvent(String body) {
         String normalized = normalizeText(body);
+        if (KARAFARIN_PURCHASE_OTP.matcher(normalized).find()) return null;
         Long amount = null;
         Matcher minus = MINUS_AMOUNT.matcher(normalized);
         boolean minusMatched = minus.find();

@@ -8,7 +8,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.widget.RemoteViews;
 
-import java.util.Calendar;
+import java.util.List;
 
 public class ExpenseWidgetProvider extends AppWidgetProvider {
     @Override
@@ -25,23 +25,46 @@ public class ExpenseWidgetProvider extends AppWidgetProvider {
     private static void update(Context context, AppWidgetManager manager, int id) {
         ExpenseStore store = new ExpenseStore(context);
         long now = System.currentTimeMillis();
-        Calendar day = Calendar.getInstance();
-        day.set(Calendar.HOUR_OF_DAY, 0);
-        day.set(Calendar.MINUTE, 0);
-        day.set(Calendar.SECOND, 0);
-        day.set(Calendar.MILLISECOND, 0);
-        Calendar week = (Calendar) day.clone();
-        week.add(Calendar.DAY_OF_YEAR, -6);
         JalaliDate.Period period = JalaliDate.periodFor(now, store.periodStartDay());
 
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.expense_widget);
         boolean fa = "fa".equals(store.language());
-        views.setTextViewText(R.id.widget_daily, context.getString(R.string.daily) + "\n" + ExpenseStore.money(store.totalBetween(day.getTimeInMillis(), now + 1), fa));
-        views.setTextViewText(R.id.widget_weekly, context.getString(R.string.weekly) + "\n" + ExpenseStore.money(store.totalBetween(week.getTimeInMillis(), now + 1), fa));
-        views.setTextViewText(R.id.widget_period, context.getString(R.string.period) + "\n" + ExpenseStore.money(store.totalBetween(period.start, period.end), fa));
+        views.setTextViewText(R.id.widget_period_label, context.getString(R.string.period));
+        views.setTextViewText(R.id.widget_period_value, ExpenseStore.money(store.totalBetween(period.start, period.end), fa));
+        views.setTextViewText(R.id.widget_period_hint, period.label(fa));
+        UncategorisedSummary uncategorised = uncategorisedSummary(store, period.start, period.end);
+        views.setTextViewText(R.id.widget_uncategorized_label, context.getString(R.string.uncategorized));
+        views.setTextViewText(R.id.widget_uncategorized_count, uncategorisedCount(uncategorised.count, fa));
+        views.setTextViewText(R.id.widget_uncategorized_sum, ExpenseStore.money(uncategorised.sum, fa));
         Intent launch = new Intent(context, MainActivity.class);
-        PendingIntent pi = PendingIntent.getActivity(context, 0, launch, PendingIntent.FLAG_IMMUTABLE);
+        launch.putExtra(MainActivity.EXTRA_FROM_WIDGET, true);
+        launch.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        PendingIntent pi = PendingIntent.getActivity(context, 0, launch, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        views.setOnClickPendingIntent(R.id.widget_root, pi);
         views.setOnClickPendingIntent(R.id.widget_period, pi);
+        views.setOnClickPendingIntent(R.id.widget_uncategorized, pi);
         manager.updateAppWidget(id, views);
+    }
+
+    private static UncategorisedSummary uncategorisedSummary(ExpenseStore store, long start, long end) {
+        UncategorisedSummary summary = new UncategorisedSummary();
+        List<ExpenseStore.Expense> expenses = store.expenses();
+        for (ExpenseStore.Expense expense : expenses) {
+            if (expense.investment || !expense.isUncategorized()) continue;
+            if (expense.time < start || expense.time >= end) continue;
+            summary.count++;
+            summary.sum += expense.amount;
+        }
+        return summary;
+    }
+
+    private static String uncategorisedCount(int count, boolean fa) {
+        String value = ExpenseStore.localNumber(count, fa);
+        return fa ? value + " مورد" : value + (count == 1 ? " item" : " items");
+    }
+
+    private static class UncategorisedSummary {
+        int count;
+        long sum;
     }
 }

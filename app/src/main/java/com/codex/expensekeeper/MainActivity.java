@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Canvas;
@@ -23,6 +24,7 @@ import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -31,6 +33,8 @@ import android.widget.TextView;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -48,6 +52,13 @@ public class MainActivity extends Activity {
     private static final int SCREEN_HISTORY = 7;
     private static final int SCREEN_SETTINGS = 8;
     private static final int SCREEN_EXPENSE_DETAILS = 9;
+    private static final String CATEGORY_UNCATEGORIZED = "uncategorized";
+    private static final String CATEGORY_EXCLUDED = "__excluded";
+    public static final String EXTRA_FROM_WIDGET = "com.codex.expensekeeper.FROM_WIDGET";
+    private static final int SORT_DATE_DESC = 0;
+    private static final int SORT_DATE_ASC = 1;
+    private static final int SORT_AMOUNT_DESC = 2;
+    private static final int SORT_AMOUNT_ASC = 3;
     private static final int ICON_ADD = 1;
     private static final int ICON_CATEGORY = 2;
     private static final int ICON_SUBCATEGORY = 3;
@@ -77,6 +88,9 @@ public class MainActivity extends Activity {
     private boolean navigatingBack;
     private boolean replacingScreen;
     private boolean settingsSubscreen;
+    private boolean firstResume = true;
+    private boolean refreshingScreen;
+    private int expenseSortMode = SORT_DATE_DESC;
     private long detailStart;
     private long detailEnd;
     private String detailLabel = "";
@@ -152,8 +166,8 @@ public class MainActivity extends Activity {
         return fa ? "این دسته حذف می‌شود. زیر‌دسته‌ها بدون والد می‌شوند و خرج‌ها باقی می‌مانند." : "This category will be removed. Child categories become top-level and expenses are kept.";
     }
 
-    private String markInvestmentLabel() {
-        return fa ? "ثبت به عنوان سرمایه‌گذاری" : "Mark as investment";
+    private String ignoreDeleteLabel() {
+        return fa ? "نادیده گرفتن / حذف" : "Ignore / delete";
     }
 
     private String categorizeLabel() {
@@ -184,8 +198,8 @@ public class MainActivity extends Activity {
         return (fa ? "باقی‌مانده: " : "Remaining: ") + ExpenseStore.money(amount, fa);
     }
 
-    private String investmentMessage() {
-        return fa ? "سرمایه‌گذاری از جمع خرج‌ها، نمودارها و لیست جزئیات حذف می‌شود." : "Investments are excluded from expense totals, charts, and detail lists.";
+    private String ignoreDeleteMessage() {
+        return fa ? "اگر این پیامک یا خرج نباید ثبت شود، آن را حذف کنید. از لیست‌ها، جمع‌ها، نمودار و ویجت پاک می‌شود." : "Delete this if the SMS or expense should not be tracked. It will be removed from lists, totals, charts, and the widget.";
     }
 
     private String sourceLabel(String source) {
@@ -230,6 +244,44 @@ public class MainActivity extends Activity {
         } else {
             showLanguageStep();
         }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (store != null && store.isConfigured() && intent.getBooleanExtra(EXTRA_FROM_WIDGET, false)) {
+            showDashboardHome();
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (firstResume) {
+            firstResume = false;
+            return;
+        }
+        refreshVisibleExpenseScreen();
+    }
+
+    private void refreshVisibleExpenseScreen() {
+        if (refreshingScreen || store == null || !store.isConfigured()) return;
+        refreshingScreen = true;
+        store = new ExpenseStore(this);
+        fa = "fa".equals(store.language());
+        replacingScreen = true;
+        if (currentScreen == SCREEN_DASHBOARD) {
+            showDashboard();
+        } else if (currentScreen == SCREEN_HISTORY) {
+            showHistory();
+        } else if (currentScreen == SCREEN_EXPENSE_DETAILS) {
+            showExpenseDetails(detailLabel, detailStart, detailEnd);
+        } else {
+            ExpenseWidgetProvider.updateAll(this);
+        }
+        replacingScreen = false;
+        refreshingScreen = false;
     }
 
     private void applyPalette() {
@@ -496,22 +548,20 @@ public class MainActivity extends Activity {
             expense.splits.clear();
             showSplitDialog(expense);
         }));
-        root.addView(subtitle(investmentMessage()));
-        root.addView(deleteButton(markInvestmentLabel(), () -> {
-            markExpenseAsInvestment(expense.id);
+        root.addView(subtitle(ignoreDeleteMessage()));
+        root.addView(deleteButton(ignoreDeleteLabel(), () -> {
+            deleteExpense(expense.id);
             dialog.dismiss();
             showDashboardHome();
         }));
         showMaterialDialog(dialog, root);
     }
 
-    private void markExpenseAsInvestment(String expenseId) {
+    private void deleteExpense(String expenseId) {
         List<ExpenseStore.Expense> expenses = store.expenses();
-        for (ExpenseStore.Expense e : expenses) {
-            if (e.id.equals(expenseId)) {
-                e.investment = true;
-                e.splits.clear();
-                break;
+        for (int i = expenses.size() - 1; i >= 0; i--) {
+            if (expenses.get(i).id.equals(expenseId)) {
+                expenses.remove(i);
             }
         }
         store.saveExpenses(expenses);
@@ -667,12 +717,28 @@ public class MainActivity extends Activity {
     private void showCategories() {
         enterScreen(SCREEN_CATEGORIES);
         LinearLayout root = base();
-        root.addView(topBar(getString(R.string.categories)));
+        root.addView(topBar(getString(R.string.categories), fa ? "انتخاب همه" : "Select all", () -> {
+            store.includeAllCategories();
+            ExpenseWidgetProvider.updateAll(this);
+            showCategories();
+        }));
         root.addView(primaryAction(fa ? "دسته تازه" : "New category", fa ? "رنگ ها برای نمودار و لیست خرج ها استفاده می شوند" : "Colors shape charts and expense lists", () -> editCategory(new ExpenseStore.Category("cat_" + System.currentTimeMillis(), "", "", Color.rgb(123, 223, 242), ""))));
         for (ExpenseStore.Category c : store.categories()) {
             LinearLayout row = card();
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setGravity(Gravity.CENTER_VERTICAL);
+            CheckBox visible = new CheckBox(this);
+            visible.setChecked(!store.isCategoryExcluded(c.id));
+            if (Build.VERSION.SDK_INT >= 21) {
+                visible.setButtonTintList(android.content.res.ColorStateList.valueOf(accent));
+            }
+            LinearLayout.LayoutParams checkLp = new LinearLayout.LayoutParams(dp(36), dp(40));
+            checkLp.setMargins(dp(6), 0, dp(6), 0);
+            visible.setLayoutParams(checkLp);
+            visible.setOnClickListener(v -> {
+                store.setCategoryExcluded(c.id, !visible.isChecked());
+                ExpenseWidgetProvider.updateAll(this);
+            });
             row.addView(iconBadge(c.parentId.isEmpty() ? ICON_CATEGORY : ICON_SUBCATEGORY, c.color, contrast(c.color)));
             TextView label = title((c.parentId.isEmpty() ? "" : (fa ? "  ‹  " : "  >  ")) + c.label(fa), 17);
             label.setSingleLine(false);
@@ -681,6 +747,7 @@ public class MainActivity extends Activity {
             labelLp.setMargins(fa ? 0 : dp(12), 0, fa ? dp(12) : 0, 0);
             label.setLayoutParams(labelLp);
             row.addView(label);
+            row.addView(visible);
             row.setOnClickListener(v -> editCategory(c));
             root.addView(row);
         }
@@ -832,9 +899,10 @@ public class MainActivity extends Activity {
             }
             long end = JalaliDate.toMillisStartOfDay(endYear, endMonth, Math.min(store.periodStartDay(), JalaliDate.daysInMonth(endYear, endMonth)));
             Map<String, Long> totals = store.categoryTotals(start, end);
+            Map<String, ArrayList<ExpenseLine>> groups = expenseGroups(start, end);
             long total = 0;
             for (long value : totals.values()) total += value;
-            if (total == 0) continue;
+            if (total == 0 && groups.isEmpty()) continue;
             String label = JalaliDate.periodLabel(fa, startYear, startMonth, store.periodStartDay()) + " " + ExpenseStore.localNumber(JalaliDate.periodLabelYear(startYear, startMonth, store.periodStartDay()), fa);
             LinearLayout card = card();
             card.addView(title(label, 20));
@@ -856,18 +924,92 @@ public class MainActivity extends Activity {
         detailEnd = end;
         enterScreen(SCREEN_EXPENSE_DETAILS);
         LinearLayout root = base();
-        root.addView(topBar(label));
+        root.addView(topBar(label, sortModeLabel(), this::cycleExpenseSort));
         root.addView(sectionLabel(fa ? "جزئیات خرج‌ها" : "Expense details"));
         Map<String, Long> totals = store.categoryTotals(start, end);
         Map<String, ArrayList<ExpenseLine>> groups = expenseGroups(start, end);
         if (groups.isEmpty()) {
             root.addView(subtitle(noExpensesLabel()));
         } else {
-            for (Map.Entry<String, ArrayList<ExpenseLine>> entry : groups.entrySet()) {
-                addExpenseGroup(root, entry.getKey(), totals.containsKey(entry.getKey()) ? totals.get(entry.getKey()) : 0, entry.getValue());
+            for (Map.Entry<String, ArrayList<ExpenseLine>> entry : sortedGroupEntries(groups, totals)) {
+                addExpenseGroup(root, entry.getKey(), groupAmount(entry, totals), entry.getValue());
             }
         }
         setContentView(wrap(root));
+    }
+
+    private String sortModeLabel() {
+        switch (expenseSortMode) {
+            case SORT_DATE_ASC:
+                return fa ? "مرتب‌سازی: تاریخ قدیمی‌تر" : "Sort: date oldest first";
+            case SORT_AMOUNT_DESC:
+                return fa ? "مرتب‌سازی: مبلغ بیشتر" : "Sort: highest amount";
+            case SORT_AMOUNT_ASC:
+                return fa ? "مرتب‌سازی: مبلغ کمتر" : "Sort: lowest amount";
+            case SORT_DATE_DESC:
+            default:
+                return fa ? "مرتب‌سازی: تاریخ جدیدتر" : "Sort: date newest first";
+        }
+    }
+
+    private void cycleExpenseSort() {
+        expenseSortMode = (expenseSortMode + 1) % 4;
+        showExpenseDetails(detailLabel, detailStart, detailEnd);
+    }
+
+    private ArrayList<Map.Entry<String, ArrayList<ExpenseLine>>> sortedGroupEntries(Map<String, ArrayList<ExpenseLine>> groups, Map<String, Long> totals) {
+        ArrayList<Map.Entry<String, ArrayList<ExpenseLine>>> entries = new ArrayList<>(groups.entrySet());
+        for (Map.Entry<String, ArrayList<ExpenseLine>> entry : entries) sortExpenseLines(entry.getValue());
+        Collections.sort(entries, (a, b) -> compareGroups(a, b, totals));
+        return entries;
+    }
+
+    private int compareGroups(Map.Entry<String, ArrayList<ExpenseLine>> a, Map.Entry<String, ArrayList<ExpenseLine>> b, Map<String, Long> totals) {
+        if (expenseSortMode == SORT_AMOUNT_ASC || expenseSortMode == SORT_AMOUNT_DESC) {
+            long av = groupAmount(a, totals);
+            long bv = groupAmount(b, totals);
+            int result = Long.compare(av, bv);
+            return expenseSortMode == SORT_AMOUNT_ASC ? result : -result;
+        }
+        long at = groupTime(a.getValue(), expenseSortMode == SORT_DATE_ASC);
+        long bt = groupTime(b.getValue(), expenseSortMode == SORT_DATE_ASC);
+        int result = Long.compare(at, bt);
+        return expenseSortMode == SORT_DATE_ASC ? result : -result;
+    }
+
+    private long groupAmount(Map.Entry<String, ArrayList<ExpenseLine>> entry, Map<String, Long> totals) {
+        if (totals.containsKey(entry.getKey())) return totals.get(entry.getKey());
+        long sum = 0;
+        for (ExpenseLine line : entry.getValue()) sum += line.amount;
+        return sum;
+    }
+
+    private long groupTime(ArrayList<ExpenseLine> lines, boolean oldest) {
+        long value = oldest ? Long.MAX_VALUE : Long.MIN_VALUE;
+        for (ExpenseLine line : lines) {
+            value = oldest ? Math.min(value, line.time) : Math.max(value, line.time);
+        }
+        return value == Long.MAX_VALUE || value == Long.MIN_VALUE ? 0 : value;
+    }
+
+    private void sortExpenseLines(ArrayList<ExpenseLine> lines) {
+        Comparator<ExpenseLine> comparator;
+        switch (expenseSortMode) {
+            case SORT_DATE_ASC:
+                comparator = Comparator.comparingLong(line -> line.time);
+                break;
+            case SORT_AMOUNT_DESC:
+                comparator = (a, b) -> Long.compare(b.amount, a.amount);
+                break;
+            case SORT_AMOUNT_ASC:
+                comparator = Comparator.comparingLong(line -> line.amount);
+                break;
+            case SORT_DATE_DESC:
+            default:
+                comparator = (a, b) -> Long.compare(b.time, a.time);
+                break;
+        }
+        Collections.sort(lines, comparator);
     }
 
     private void addExpenseGroup(LinearLayout root, String categoryId, long total, ArrayList<ExpenseLine> lines) {
@@ -925,16 +1067,18 @@ public class MainActivity extends Activity {
     private Map<String, ArrayList<ExpenseLine>> expenseGroups(long start, long end) {
         Map<String, ArrayList<ExpenseLine>> groups = new LinkedHashMap<>();
         for (ExpenseStore.Category c : store.categories()) groups.put(c.id, new ArrayList<>());
-        groups.put("uncategorized", new ArrayList<>());
+        groups.put(CATEGORY_UNCATEGORIZED, new ArrayList<>());
+        groups.put(CATEGORY_EXCLUDED, new ArrayList<>());
         for (ExpenseStore.Expense e : store.expenses()) {
             if (e.investment) continue;
             if (e.time < start || e.time >= end) continue;
             if (e.splits.isEmpty()) {
-                addExpenseLine(groups, "uncategorized", new ExpenseLine(e.id, -1, "uncategorized", e.time, e.amount, e.description.isEmpty() ? sourceLabel(e.source) : e.description));
+                addExpenseLine(groups, CATEGORY_UNCATEGORIZED, new ExpenseLine(e.id, -1, CATEGORY_UNCATEGORIZED, e.time, e.amount, e.description.isEmpty() ? sourceLabel(e.source) : e.description));
             } else {
                 for (int i = 0; i < e.splits.size(); i++) {
                     ExpenseStore.Split split = e.splits.get(i);
-                    addExpenseLine(groups, split.categoryId, new ExpenseLine(e.id, i, split.categoryId, e.time, split.amount, e.description.isEmpty() ? sourceLabel(e.source) : e.description));
+                    String groupId = store.isCategoryExcluded(split.categoryId) ? CATEGORY_EXCLUDED : split.categoryId;
+                    addExpenseLine(groups, groupId, new ExpenseLine(e.id, i, split.categoryId, e.time, split.amount, e.description.isEmpty() ? sourceLabel(e.source) : e.description));
                 }
             }
         }
@@ -987,6 +1131,7 @@ public class MainActivity extends Activity {
     }
 
     private String categoryName(String id) {
+        if (CATEGORY_EXCLUDED.equals(id)) return fa ? "دسته‌های پنهان" : "Excluded categories";
         ExpenseStore.Category category = categoryById(id);
         return category == null ? uncategorizedLabel() : category.label(fa);
     }
@@ -1117,6 +1262,10 @@ public class MainActivity extends Activity {
     }
 
     private View topBar(String label) {
+        return topBar(label, "", null);
+    }
+
+    private View topBar(String label, String actionLabel, final Runnable action) {
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);
@@ -1141,7 +1290,35 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
         t.setLayoutParams(titleLp);
         bar.addView(t);
+        if (action != null && actionLabel != null && !actionLabel.isEmpty()) {
+            TextView actionView = headerAction(actionLabel, action);
+            LinearLayout.LayoutParams actionLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(36));
+            actionLp.setMargins(fa ? dp(10) : 0, 0, fa ? 0 : dp(10), 0);
+            actionView.setLayoutParams(actionLp);
+            bar.addView(actionView);
+        }
         return bar;
+    }
+
+    private TextView headerAction(String s, final Runnable action) {
+        TextView b = new TextView(this);
+        b.setText(localText(s));
+        b.setTextColor(accent);
+        b.setTextSize(12);
+        b.setTypeface(font, Typeface.NORMAL);
+        b.setGravity(Gravity.CENTER);
+        b.setIncludeFontPadding(false);
+        b.setSingleLine(false);
+        b.setMaxLines(2);
+        applyTextDirection(b);
+        b.setBackground(rounded(surfaceAlt, dp(14), outline, dark ? dp(1) : 0));
+        b.setOnClickListener(v -> action.run());
+        b.setPadding(dp(12), 0, dp(12), 0);
+        if (Build.VERSION.SDK_INT >= 21) {
+            b.setElevation(0);
+            b.setStateListAnimator(null);
+        }
+        return b;
     }
 
     private TextView title(String s, int sp) {
@@ -1473,14 +1650,17 @@ public class MainActivity extends Activity {
 
     private void deleteCategory(String id) {
         List<ExpenseStore.Category> categories = store.categories();
+        boolean removed = false;
         for (int i = categories.size() - 1; i >= 0; i--) {
             ExpenseStore.Category c = categories.get(i);
             if (c.id.equals(id)) {
                 categories.remove(i);
+                removed = true;
             } else if (id.equals(c.parentId)) {
                 c.parentId = "";
             }
         }
+        if (removed) store.markDefaultCategoryDeleted(id);
         store.saveCategories(categories);
 
         List<ExpenseStore.Expense> expenses = store.expenses();
@@ -2159,7 +2339,8 @@ public class MainActivity extends Activity {
             int top = dp(16);
             int width = getWidth() - dp(16);
             int y = top;
-            for (Map.Entry<String, Long> entry : totals.entrySet()) {
+            ArrayList<Map.Entry<String, Long>> entries = sortedTotals(totals);
+            for (Map.Entry<String, Long> entry : entries) {
                 ExpenseStore.Category c = categories.get(entry.getKey());
                 int color = c == null ? Color.rgb(173, 181, 189) : c.color;
                 String label = c == null ? (fa ? "بدون دسته" : "Uncategorized") : c.label(fa);
@@ -2204,7 +2385,7 @@ public class MainActivity extends Activity {
             paint.setStrokeWidth(dp(20));
             float start = -90f;
             float drawn = 0f;
-            ArrayList<Map.Entry<String, Long>> entries = new ArrayList<>(totals.entrySet());
+            ArrayList<Map.Entry<String, Long>> entries = sortedTotals(totals);
             for (int i = 0; i < entries.size(); i++) {
                 Map.Entry<String, Long> entry = entries.get(i);
                 ExpenseStore.Category c = categories.get(entry.getKey());
@@ -2253,6 +2434,12 @@ public class MainActivity extends Activity {
                 String more = fa ? ExpenseStore.localNumber(extra, true) + " مورد دیگر" : "+" + extra + " more";
                 canvas.drawText(more, legendLeft + dp(22), y + dp(12), paint);
             }
+        }
+
+        private ArrayList<Map.Entry<String, Long>> sortedTotals(Map<String, Long> source) {
+            ArrayList<Map.Entry<String, Long>> entries = new ArrayList<>(source.entrySet());
+            Collections.sort(entries, (a, b) -> Long.compare(b.getValue(), a.getValue()));
+            return entries;
         }
 
         private String shortCanvas(String s, int max) {

@@ -10,16 +10,22 @@ import org.json.JSONObject;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public class ExpenseStore {
     private static final String PREFS = "expense_store";
     private static final String KEY_EXPENSES = "expenses";
     private static final String KEY_CATEGORIES = "categories";
+    private static final String KEY_EXCLUDED_CATEGORIES = "excluded_categories";
+    private static final String KEY_DELETED_DEFAULT_CATEGORIES = "deleted_default_categories";
+    private static final String CATEGORY_INVESTMENT = "investment";
     private final SharedPreferences prefs;
 
     public ExpenseStore(Context context) {
@@ -73,7 +79,42 @@ public class ExpenseStore {
     public void saveCategories(List<Category> categories) {
         JSONArray arr = new JSONArray();
         for (Category c : categories) arr.put(c.toJson());
-        prefs.edit().putString(KEY_CATEGORIES, arr.toString()).apply();
+        prefs.edit().putString(KEY_CATEGORIES, arr.toString()).commit();
+    }
+
+    public void markDefaultCategoryDeleted(String categoryId) {
+        Set<String> ids = readStringSet(KEY_DELETED_DEFAULT_CATEGORIES);
+        ids.add(categoryId);
+        saveStringSet(KEY_DELETED_DEFAULT_CATEGORIES, ids);
+        Set<String> excluded = excludedCategoryIds();
+        excluded.remove(categoryId);
+        saveExcludedCategoryIds(excluded);
+    }
+
+    public Set<String> excludedCategoryIds() {
+        return readStringSet(KEY_EXCLUDED_CATEGORIES);
+    }
+
+    public boolean isCategoryExcluded(String categoryId) {
+        return excludedCategoryIds().contains(categoryId);
+    }
+
+    public void setCategoryExcluded(String categoryId, boolean excluded) {
+        Set<String> ids = excludedCategoryIds();
+        if (excluded) {
+            ids.add(categoryId);
+        } else {
+            ids.remove(categoryId);
+        }
+        saveExcludedCategoryIds(ids);
+    }
+
+    public void includeAllCategories() {
+        saveExcludedCategoryIds(new HashSet<>());
+    }
+
+    private void saveExcludedCategoryIds(Set<String> ids) {
+        saveStringSet(KEY_EXCLUDED_CATEGORIES, ids);
     }
 
     public List<Expense> expenses() {
@@ -89,7 +130,7 @@ public class ExpenseStore {
     public void saveExpenses(List<Expense> expenses) {
         JSONArray arr = new JSONArray();
         for (Expense e : expenses) arr.put(e.toJson());
-        prefs.edit().putString(KEY_EXPENSES, arr.toString()).apply();
+        prefs.edit().putString(KEY_EXPENSES, arr.toString()).commit();
     }
 
     public void addExpense(Expense expense) {
@@ -100,15 +141,24 @@ public class ExpenseStore {
 
     public long totalBetween(long start, long end) {
         long total = 0;
+        Set<String> excluded = excludedCategoryIds();
         for (Expense e : expenses()) {
             if (e.investment) continue;
-            if (e.time >= start && e.time < end) total += e.amount;
+            if (e.time < start || e.time >= end) continue;
+            if (e.splits.isEmpty()) {
+                total += e.amount;
+            } else {
+                for (Split s : e.splits) {
+                    if (!excluded.contains(s.categoryId)) total += s.amount;
+                }
+            }
         }
         return total;
     }
 
     public Map<String, Long> categoryTotals(long start, long end) {
         Map<String, Long> totals = new LinkedHashMap<>();
+        Set<String> excluded = excludedCategoryIds();
         for (Expense e : expenses()) {
             if (e.investment) continue;
             if (e.time < start || e.time >= end) continue;
@@ -116,11 +166,20 @@ public class ExpenseStore {
                 totals.put("uncategorized", totals.containsKey("uncategorized") ? totals.get("uncategorized") + e.amount : e.amount);
             } else {
                 for (Split s : e.splits) {
+                    if (excluded.contains(s.categoryId)) continue;
                     totals.put(s.categoryId, totals.containsKey(s.categoryId) ? totals.get(s.categoryId) + s.amount : s.amount);
                 }
             }
         }
-        return totals;
+        return sortedTotals(totals);
+    }
+
+    private Map<String, Long> sortedTotals(Map<String, Long> totals) {
+        List<Map.Entry<String, Long>> entries = new ArrayList<>(totals.entrySet());
+        Collections.sort(entries, (a, b) -> Long.compare(b.getValue(), a.getValue()));
+        Map<String, Long> sorted = new LinkedHashMap<>();
+        for (Map.Entry<String, Long> entry : entries) sorted.put(entry.getKey(), entry.getValue());
+        return sorted;
     }
 
     public static String money(long amount) {
@@ -173,13 +232,25 @@ public class ExpenseStore {
     private void ensureDefaults() {
         if (!prefs.contains(KEY_CATEGORIES)) {
             saveCategories(defaultCategories());
+            setCategoryExcluded(CATEGORY_INVESTMENT, true);
             return;
         }
 
         Map<String, Category> defaults = new LinkedHashMap<>();
         for (Category c : defaultCategories()) defaults.put(c.id, c);
         List<Category> current = categories();
+        Map<String, Category> currentById = new LinkedHashMap<>();
+        for (Category c : current) currentById.put(c.id, c);
+        Set<String> deletedDefaults = readStringSet(KEY_DELETED_DEFAULT_CATEGORIES);
         boolean changed = false;
+        boolean addedInvestment = false;
+        for (Category clean : defaults.values()) {
+            if (!currentById.containsKey(clean.id) && !deletedDefaults.contains(clean.id) && CATEGORY_INVESTMENT.equals(clean.id)) {
+                current.add(clean);
+                changed = true;
+                if (CATEGORY_INVESTMENT.equals(clean.id)) addedInvestment = true;
+            }
+        }
         for (Category c : current) {
             Category clean = defaults.get(c.id);
             if (clean == null) continue;
@@ -195,6 +266,7 @@ public class ExpenseStore {
         if (changed) {
             saveCategories(current);
         }
+        if (addedInvestment) setCategoryExcluded(CATEGORY_INVESTMENT, true);
     }
 
     private List<Category> defaultCategories() {
@@ -208,11 +280,28 @@ public class ExpenseStore {
         seed.add(new Category("home", "Home", "خانه", 0xFF80ED99, ""));
         seed.add(new Category("health", "Health", "سلامت", 0xFFF15BB5, ""));
         seed.add(new Category("cigarette", "Cigarette", "سیگار", 0xFFADB5BD, ""));
+        seed.add(new Category(CATEGORY_INVESTMENT, "Investment", "سرمایه‌گذاری", 0xFF5E60CE, ""));
         return seed;
     }
 
     private boolean isBrokenText(String s) {
         return s.contains("Ø") || s.contains("Ù") || s.contains("Û") || s.contains("Ú") || s.contains("�");
+    }
+
+    private Set<String> readStringSet(String key) {
+        Set<String> ids = new HashSet<>();
+        JSONArray arr = readArray(key);
+        for (int i = 0; i < arr.length(); i++) {
+            String id = arr.optString(i, "");
+            if (!id.isEmpty()) ids.add(id);
+        }
+        return ids;
+    }
+
+    private void saveStringSet(String key, Set<String> ids) {
+        JSONArray arr = new JSONArray();
+        for (String id : ids) arr.put(id);
+        prefs.edit().putString(key, arr.toString()).commit();
     }
 
     public static class Category {
