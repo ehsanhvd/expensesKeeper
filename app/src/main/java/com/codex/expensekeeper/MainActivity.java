@@ -1175,9 +1175,11 @@ public class MainActivity extends Activity {
         root.addView(settingsItem(getString(R.string.setup_language), ICON_LANGUAGE, accent, this::showLanguageStep));
         root.addView(settingsItem(getString(R.string.setup_theme), ICON_THEME, accent2, this::showThemeStep));
         root.addView(settingsItem(getString(R.string.setup_period), ICON_PERIOD, accent3, this::showPeriodStep));
-        root.addView(sectionLabel("SMS"));
-        root.addView(subtitle(getString(R.string.sms_permission)));
-        root.addView(option(fa ? "فعال کردن دسترسی پیامک" : "Allow SMS access", this::askSmsPermission));
+        if (!hasSmsPermission()) {
+            root.addView(sectionLabel("SMS"));
+            root.addView(subtitle(getString(R.string.sms_permission)));
+            root.addView(option(fa ? "فعال کردن دسترسی پیامک" : "Allow SMS access", this::askSmsPermission));
+        }
         setContentView(wrap(root));
     }
 
@@ -1238,8 +1240,20 @@ public class MainActivity extends Activity {
     }
 
     private void askSmsPermission() {
-        if (android.os.Build.VERSION.SDK_INT >= 23 && checkSelfPermission(Manifest.permission.RECEIVE_SMS) != PackageManager.PERMISSION_GRANTED) {
+        if (!hasSmsPermission()) {
             requestPermissions(new String[]{Manifest.permission.RECEIVE_SMS}, 7);
+        }
+    }
+
+    private boolean hasSmsPermission() {
+        return checkSelfPermission(Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 7 && currentScreen == SCREEN_SETTINGS && hasSmsPermission()) {
+            replaceWithSettings();
         }
     }
 
