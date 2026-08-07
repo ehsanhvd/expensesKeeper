@@ -25,6 +25,8 @@ public class ExpenseStore {
     private static final String KEY_CATEGORIES = "categories";
     private static final String KEY_EXCLUDED_CATEGORIES = "excluded_categories";
     private static final String KEY_DELETED_DEFAULT_CATEGORIES = "deleted_default_categories";
+    private static final String KEY_SMS_TOMAN_MIGRATION_DONE = "sms_toman_migration_done";
+    private static final String KEY_SMS_TOMAN_RECONCILIATION_DONE = "sms_toman_reconciliation_done";
     private static final String CATEGORY_INVESTMENT = "investment";
     private final SharedPreferences prefs;
 
@@ -216,17 +218,28 @@ public class ExpenseStore {
     }
 
     private void migrateSmsAmountsToToman() {
-        if (prefs.getBoolean("sms_toman_migration_done", false)) return;
+        if (prefs.getBoolean(KEY_SMS_TOMAN_RECONCILIATION_DONE, false)) return;
         List<Expense> current = expenses();
         boolean changed = false;
         for (Expense e : current) {
-            if ("sms".equals(e.source) && e.amount >= 10) {
+            if (!"sms".equals(e.source) || e.amount < 10) continue;
+
+            Long parsedToman = SmsExpenseReceiver.parseExpenseAmount(e.description);
+            if (parsedToman != null && parsedToman > 0) {
+                if (e.amount != parsedToman) {
+                    e.amount = parsedToman;
+                    changed = true;
+                }
+            } else if (!prefs.getBoolean(KEY_SMS_TOMAN_MIGRATION_DONE, false)) {
                 e.amount = e.amount / 10;
                 changed = true;
             }
         }
         if (changed) saveExpenses(current);
-        prefs.edit().putBoolean("sms_toman_migration_done", true).apply();
+        prefs.edit()
+                .putBoolean(KEY_SMS_TOMAN_MIGRATION_DONE, true)
+                .putBoolean(KEY_SMS_TOMAN_RECONCILIATION_DONE, true)
+                .apply();
     }
 
     private void ensureDefaults() {

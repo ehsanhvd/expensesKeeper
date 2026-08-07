@@ -40,6 +40,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class MainActivity extends Activity {
     private static final int SCREEN_NONE = 0;
@@ -70,6 +72,9 @@ public class MainActivity extends Activity {
     private static final int ICON_THEME = 9;
     private static final int ICON_PERIOD = 10;
     private static final int ICON_PARENT = 11;
+    private static final Pattern BIDI_NUMERIC_TOKEN = Pattern.compile("[+\\-]?[0-9۰-۹٠-٩][0-9۰-۹٠-٩,٬./:*+\\-]*");
+    private static final String LTR_ISOLATE = "\u2066";
+    private static final String POP_DIRECTIONAL_ISOLATE = "\u2069";
 
     private ExpenseStore store;
     private boolean fa;
@@ -1154,7 +1159,17 @@ public class MainActivity extends Activity {
     }
 
     private String localText(String s) {
-        return fa && s != null ? toPersianDigits(s) : s;
+        return fa && s != null ? toPersianDigits(isolateNumericTokens(s)) : s;
+    }
+
+    private String isolateNumericTokens(String s) {
+        Matcher matcher = BIDI_NUMERIC_TOKEN.matcher(s);
+        StringBuffer out = new StringBuffer();
+        while (matcher.find()) {
+            matcher.appendReplacement(out, Matcher.quoteReplacement(LTR_ISOLATE + matcher.group() + POP_DIRECTIONAL_ISOLATE));
+        }
+        matcher.appendTail(out);
+        return out.toString();
     }
 
     private String directionArrow(boolean forward) {
