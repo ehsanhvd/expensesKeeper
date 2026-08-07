@@ -14,6 +14,22 @@ android {
         versionName '1.0.1'
     }
 
+    flavorDimensions 'market'
+
+    productFlavors {
+        bazaar {
+            dimension 'market'
+            resValue 'string', 'market_name', 'Bazaar'
+            manifestPlaceholders = [marketName: 'bazaar']
+        }
+
+        myket {
+            dimension 'market'
+            resValue 'string', 'market_name', 'Myket'
+            manifestPlaceholders = [marketName: 'myket']
+        }
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
