@@ -24,4 +24,7 @@
     <string name="description">توضیح</string>
     <string name="save">ذخیره</string>
     <string name="sms_permission">دسترسی پیامک باعث می‌شود خریدهای بانکی به عنوان خرج بدون دسته ذخیره شوند.</string>
+    <string name="invite_app">دعوت</string>
+    <string name="share_app_chooser">اشتراک‌گذاری خرج‌نگار</string>
+    <string name="share_app_message">خرج‌هایت را ساده با %1$s پیگیری کن:\n%2$s</string>
 </resources>

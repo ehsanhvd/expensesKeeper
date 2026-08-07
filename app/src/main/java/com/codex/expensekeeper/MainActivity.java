@@ -72,6 +72,7 @@ public class MainActivity extends Activity {
     private static final int ICON_THEME = 9;
     private static final int ICON_PERIOD = 10;
     private static final int ICON_PARENT = 11;
+    private static final int ICON_SHARE = 12;
     private static final Pattern BIDI_NUMERIC_TOKEN = Pattern.compile("[+\\-]?[0-9۰-۹٠-٩][0-9۰-۹٠-٩,٬./:*+\\-]*");
     private static final String LTR_ISOLATE = "\u2066";
     private static final String POP_DIRECTIONAL_ISOLATE = "\u2069";
@@ -463,9 +464,23 @@ public class MainActivity extends Activity {
         header.setPadding(dp(2), dp(8), dp(2), dp(10));
         TextView app = labelText(getString(R.string.app_name), accent);
         header.addView(app);
+
+        LinearLayout titleRow = new LinearLayout(this);
+        titleRow.setOrientation(LinearLayout.HORIZONTAL);
+        titleRow.setGravity(Gravity.CENTER_VERTICAL);
         TextView headline = title(getString(R.string.dashboard), 32);
         headline.setPadding(0, dp(6), 0, dp(2));
-        header.addView(headline);
+        headline.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        titleRow.addView(headline);
+        ImageView share = iconButton(ICON_SHARE, surfaceAlt, accent, 40, 16);
+        LinearLayout.LayoutParams shareLp = new LinearLayout.LayoutParams(dp(40), dp(40));
+        shareLp.setMargins(fa ? dp(10) : dp(12), 0, fa ? dp(12) : dp(10), 0);
+        share.setLayoutParams(shareLp);
+        share.setContentDescription(getString(R.string.invite_app));
+        share.setOnClickListener(v -> shareApp());
+        titleRow.addView(share);
+        header.addView(titleRow);
+
         TextView hint = subtitle(fa ? "خرج ها، دسته ها و دوره ها در یک نگاه" : "Expenses, categories, and periods at a glance");
         hint.setPadding(0, 0, 0, dp(4));
         header.addView(hint);
@@ -483,6 +498,14 @@ public class MainActivity extends Activity {
         row.addView(destinationTile(getString(R.string.settings), ICON_SETTINGS, accent, this::showSettings));
         group.addView(row);
         return group;
+    }
+
+    private void shareApp() {
+        String message = getString(R.string.share_app_message, getString(R.string.app_name), getString(R.string.share_app_url));
+        Intent send = new Intent(Intent.ACTION_SEND);
+        send.setType("text/plain");
+        send.putExtra(Intent.EXTRA_TEXT, message);
+        startActivity(Intent.createChooser(send, getString(R.string.share_app_chooser)));
     }
 
     private LinearLayout navLine() {
@@ -2296,6 +2319,19 @@ public class MainActivity extends Activity {
                 canvas.drawCircle(cx, t + s * 0.20f, s * 0.08f, p);
                 canvas.drawCircle(l + s * 0.34f, t + s * 0.78f, s * 0.08f, p);
                 canvas.drawCircle(l + s * 0.66f, t + s * 0.78f, s * 0.08f, p);
+            } else if (icon == ICON_SHARE) {
+                float x1 = l + s * 0.30f;
+                float y1 = t + s * 0.52f;
+                float x2 = l + s * 0.68f;
+                float y2 = t + s * 0.30f;
+                float x3 = l + s * 0.68f;
+                float y3 = t + s * 0.72f;
+                canvas.drawLine(x1, y1, x2, y2, p);
+                canvas.drawLine(x1, y1, x3, y3, p);
+                p.setStyle(Paint.Style.FILL);
+                canvas.drawCircle(x1, y1, s * 0.09f, p);
+                canvas.drawCircle(x2, y2, s * 0.09f, p);
+                canvas.drawCircle(x3, y3, s * 0.09f, p);
             }
         }
 

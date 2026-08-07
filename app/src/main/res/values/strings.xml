@@ -24,4 +24,7 @@
     <string name="description">Description</string>
     <string name="save">Save</string>
     <string name="sms_permission">SMS permission lets the app save bank purchase messages as uncategorized expenses.</string>
+    <string name="invite_app">Invite</string>
+    <string name="share_app_chooser">Share ExpenseKeeper</string>
+    <string name="share_app_message">Track expenses simply with %1$s:\n%2$s</string>
 </resources>
