@@ -28,7 +28,7 @@ public class ExpenseStore {
     private static final String KEY_EXCLUDED_CATEGORIES = "excluded_categories";
     private static final String KEY_DELETED_DEFAULT_CATEGORIES = "deleted_default_categories";
     private static final String KEY_SMS_TOMAN_MIGRATION_DONE = "sms_toman_migration_done";
-    private static final String KEY_SMS_TOMAN_RECONCILIATION_DONE = "sms_toman_reconciliation_done";
+    private static final String KEY_SMS_TOMAN_RECONCILIATION_DONE = "sms_toman_reconciliation_done_v2";
     private static final String KEY_EXPENSE_SORT_MODE = "expense_sort_mode";
     private static final String CATEGORY_INVESTMENT = "investment";
     private final SharedPreferences prefs;
