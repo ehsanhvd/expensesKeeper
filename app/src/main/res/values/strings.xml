@@ -26,5 +26,18 @@
     <string name="sms_permission">SMS permission lets the app save bank purchase messages as uncategorized expenses.</string>
     <string name="invite_app">Invite</string>
     <string name="share_app_chooser">Share ExpenseKeeper</string>
-    <string name="share_app_message">Track expenses simply with %1$s:\n%2$s</string>
+    <string name="share_app_prompt">Share app</string>
+    <string name="share_app_message">Take control of your spending with %1$s — a simple way to track expenses and stay organized. Try it today!\n%2$s</string>
+    <string name="backup_restore">Backup and restore</string>
+    <string name="backup_data">Create backup</string>
+    <string name="restore_data">Restore backup</string>
+    <string name="backup_success">Backup saved</string>
+    <string name="backup_failed">Could not save the backup</string>
+    <string name="restore_confirm_title">Replace all data?</string>
+    <string name="restore_confirm_message">Restoring this backup will overwrite all current expenses, categories, and settings. This cannot be undone.</string>
+    <string name="restore_confirm_action">Replace and restore</string>
+    <string name="restore_success">Restored %1$d expenses and %2$d categories</string>
+    <string name="restore_failed">This file is not a valid ExpenseKeeper backup</string>
+    <string name="restore_newer_version">This backup uses a newer format. Update ExpenseKeeper before restoring it.</string>
+    <string name="restore_unsupported_version">This old backup format is not supported by this version of ExpenseKeeper.</string>
 </resources>

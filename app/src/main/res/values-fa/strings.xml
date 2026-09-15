@@ -26,5 +26,18 @@
     <string name="sms_permission">دسترسی پیامک باعث می‌شود خریدهای بانکی به عنوان خرج بدون دسته ذخیره شوند.</string>
     <string name="invite_app">دعوت</string>
     <string name="share_app_chooser">اشتراک‌گذاری خرج‌نگار</string>
-    <string name="share_app_message">خرج‌هایت را ساده با %1$s پیگیری کن:\n%2$s</string>
+    <string name="share_app_prompt">معرفی به دوستان</string>
+    <string name="share_app_message">با %1$s خرج‌هایت را ساده مدیریت کن، هزینه‌ها را زیر نظر بگیر و همیشه منظم بمان. همین امروز امتحانش کن!\n%2$s</string>
+    <string name="backup_restore">پشتیبان‌گیری و بازیابی</string>
+    <string name="backup_data">ساخت فایل پشتیبان</string>
+    <string name="restore_data">بازیابی فایل پشتیبان</string>
+    <string name="backup_success">فایل پشتیبان ذخیره شد</string>
+    <string name="backup_failed">ذخیره فایل پشتیبان انجام نشد</string>
+    <string name="restore_confirm_title">همه داده‌ها جایگزین شوند؟</string>
+    <string name="restore_confirm_message">با بازیابی این فایل، همه خرج‌ها، دسته‌ها و تنظیمات فعلی بازنویسی می‌شوند. این کار قابل بازگشت نیست.</string>
+    <string name="restore_confirm_action">جایگزینی و بازیابی</string>
+    <string name="restore_success">%1$d خرج و %2$d دسته بازیابی شد</string>
+    <string name="restore_failed">این فایل، پشتیبان معتبر خرج‌نگار نیست</string>
+    <string name="restore_newer_version">قالب این فایل پشتیبان جدیدتر است. برای بازیابی، خرج‌نگار را به‌روز کنید.</string>
+    <string name="restore_unsupported_version">این نسخه قدیمی فایل پشتیبان در این نسخه خرج‌نگار پشتیبانی نمی‌شود.</string>
 </resources>

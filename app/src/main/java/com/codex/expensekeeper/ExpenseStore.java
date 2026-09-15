@@ -20,6 +20,8 @@ import java.util.Set;
 import java.util.UUID;
 
 public class ExpenseStore {
+    public static final int BACKUP_SCHEMA_VERSION = 1;
+    private static final String BACKUP_FORMAT = "expensekeeper-backup";
     private static final String PREFS = "expense_store";
     private static final String KEY_EXPENSES = "expenses";
     private static final String KEY_CATEGORIES = "categories";
@@ -27,6 +29,7 @@ public class ExpenseStore {
     private static final String KEY_DELETED_DEFAULT_CATEGORIES = "deleted_default_categories";
     private static final String KEY_SMS_TOMAN_MIGRATION_DONE = "sms_toman_migration_done";
     private static final String KEY_SMS_TOMAN_RECONCILIATION_DONE = "sms_toman_reconciliation_done";
+    private static final String KEY_EXPENSE_SORT_MODE = "expense_sort_mode";
     private static final String CATEGORY_INVESTMENT = "investment";
     private final SharedPreferences prefs;
 
@@ -66,6 +69,15 @@ public class ExpenseStore {
 
     public void setPeriodStartDay(int day) {
         prefs.edit().putInt("periodStartDay", day).apply();
+    }
+
+    public int expenseSortMode() {
+        int mode = prefs.getInt(KEY_EXPENSE_SORT_MODE, 0);
+        return mode >= 0 && mode <= 3 ? mode : 0;
+    }
+
+    public void setExpenseSortMode(int mode) {
+        prefs.edit().putInt(KEY_EXPENSE_SORT_MODE, mode >= 0 && mode <= 3 ? mode : 0).apply();
     }
 
     public List<Category> categories() {
@@ -139,6 +151,175 @@ public class ExpenseStore {
         List<Expense> all = expenses();
         all.add(0, expense);
         saveExpenses(all);
+    }
+
+    public String createBackup(String appVersionName, long appVersionCode) throws JSONException {
+        JSONObject root = new JSONObject();
+        root.put("format", BACKUP_FORMAT);
+        root.put("schemaVersion", BACKUP_SCHEMA_VERSION);
+        root.put("createdAt", System.currentTimeMillis());
+
+        JSONObject app = new JSONObject();
+        app.put("versionName", appVersionName);
+        app.put("versionCode", appVersionCode);
+        root.put("app", app);
+
+        JSONObject data = new JSONObject();
+        data.put("configured", isConfigured());
+        data.put("language", language());
+        data.put("theme", theme());
+        data.put("periodStartDay", periodStartDay());
+
+        JSONArray categories = new JSONArray();
+        for (Category category : categories()) categories.put(category.toJson());
+        data.put("categories", categories);
+
+        JSONArray expenses = new JSONArray();
+        for (Expense expense : expenses()) expenses.put(expense.toJson());
+        data.put("expenses", expenses);
+        data.put("excludedCategoryIds", stringArray(excludedCategoryIds()));
+        data.put("deletedDefaultCategoryIds", stringArray(readStringSet(KEY_DELETED_DEFAULT_CATEGORIES)));
+        root.put("data", data);
+        return root.toString(2);
+    }
+
+    public RestoreSummary restoreBackup(String backupText) throws BackupException {
+        try {
+            JSONObject root = new JSONObject(backupText);
+            if (!BACKUP_FORMAT.equals(root.optString("format"))) {
+                throw new BackupException(BackupException.INVALID_FORMAT);
+            }
+            int schemaVersion = root.getInt("schemaVersion");
+            if (schemaVersion > BACKUP_SCHEMA_VERSION) {
+                throw new BackupException(BackupException.NEWER_VERSION);
+            }
+            if (schemaVersion < 1) {
+                throw new BackupException(BackupException.UNSUPPORTED_VERSION);
+            }
+            root.getLong("createdAt");
+
+            JSONObject app = root.getJSONObject("app");
+            requiredString(app, "versionName");
+            app.getLong("versionCode");
+
+            // Parse each schema explicitly so future versions can add migrations here.
+            JSONObject data = root.getJSONObject("data");
+            boolean configured = data.getBoolean("configured");
+            String language = requiredString(data, "language");
+            String theme = requiredString(data, "theme");
+            int periodStartDay = data.getInt("periodStartDay");
+            if (!("fa".equals(language) || "en".equals(language))
+                    || !("system".equals(theme) || "light".equals(theme) || "dark".equals(theme))
+                    || periodStartDay < 1 || periodStartDay > 31) {
+                throw new BackupException(BackupException.INVALID_FORMAT);
+            }
+
+            JSONArray categoryJson = data.getJSONArray("categories");
+            JSONArray expenseJson = data.getJSONArray("expenses");
+            JSONArray excludedJson = data.getJSONArray("excludedCategoryIds");
+            JSONArray deletedJson = data.getJSONArray("deletedDefaultCategoryIds");
+            validateCategories(categoryJson);
+            validateExpenses(expenseJson);
+            validateStringArray(excludedJson);
+            validateStringArray(deletedJson);
+
+            int localSortMode = expenseSortMode();
+            SharedPreferences.Editor editor = prefs.edit().clear()
+                    .putBoolean("configured", configured)
+                    .putInt(KEY_EXPENSE_SORT_MODE, localSortMode)
+                    .putString("language", language)
+                    .putString("theme", theme)
+                    .putInt("periodStartDay", periodStartDay)
+                    .putString(KEY_CATEGORIES, categoryJson.toString())
+                    .putString(KEY_EXPENSES, expenseJson.toString())
+                    .putString(KEY_EXCLUDED_CATEGORIES, excludedJson.toString())
+                    .putString(KEY_DELETED_DEFAULT_CATEGORIES, deletedJson.toString())
+                    // Schema 1 stores SMS expenses in Toman, so never migrate them again.
+                    .putBoolean(KEY_SMS_TOMAN_MIGRATION_DONE, true)
+                    .putBoolean(KEY_SMS_TOMAN_RECONCILIATION_DONE, true);
+            if (!editor.commit()) throw new BackupException(BackupException.WRITE_FAILED);
+            return new RestoreSummary(expenseJson.length(), categoryJson.length());
+        } catch (BackupException e) {
+            throw e;
+        } catch (JSONException | RuntimeException e) {
+            throw new BackupException(BackupException.INVALID_FORMAT);
+        }
+    }
+
+    private JSONArray stringArray(Set<String> values) {
+        List<String> sorted = new ArrayList<>(values);
+        Collections.sort(sorted);
+        JSONArray result = new JSONArray();
+        for (String value : sorted) result.put(value);
+        return result;
+    }
+
+    private static String requiredString(JSONObject object, String key) throws JSONException, BackupException {
+        if (!object.has(key) || object.isNull(key)) throw new BackupException(BackupException.INVALID_FORMAT);
+        return object.getString(key);
+    }
+
+    private static void validateCategories(JSONArray categories) throws JSONException, BackupException {
+        Set<String> ids = new HashSet<>();
+        for (int i = 0; i < categories.length(); i++) {
+            JSONObject category = categories.getJSONObject(i);
+            String id = requiredString(category, "id");
+            requiredString(category, "en");
+            requiredString(category, "fa");
+            category.getInt("color");
+            requiredString(category, "parentId");
+            if (id.isEmpty() || !ids.add(id)) throw new BackupException(BackupException.INVALID_FORMAT);
+        }
+    }
+
+    private static void validateExpenses(JSONArray expenses) throws JSONException, BackupException {
+        Set<String> ids = new HashSet<>();
+        for (int i = 0; i < expenses.length(); i++) {
+            JSONObject expense = expenses.getJSONObject(i);
+            String id = requiredString(expense, "id");
+            expense.getLong("time");
+            expense.getLong("amount");
+            requiredString(expense, "description");
+            requiredString(expense, "source");
+            expense.getBoolean("investment");
+            if (id.isEmpty() || !ids.add(id)) throw new BackupException(BackupException.INVALID_FORMAT);
+            JSONArray splits = expense.getJSONArray("splits");
+            for (int j = 0; j < splits.length(); j++) {
+                JSONObject split = splits.getJSONObject(j);
+                if (requiredString(split, "categoryId").isEmpty()) {
+                    throw new BackupException(BackupException.INVALID_FORMAT);
+                }
+                split.getLong("amount");
+            }
+        }
+    }
+
+    private static void validateStringArray(JSONArray values) throws JSONException, BackupException {
+        for (int i = 0; i < values.length(); i++) {
+            if (!(values.get(i) instanceof String)) throw new BackupException(BackupException.INVALID_FORMAT);
+        }
+    }
+
+    public static class RestoreSummary {
+        public final int expenseCount;
+        public final int categoryCount;
+
+        RestoreSummary(int expenseCount, int categoryCount) {
+            this.expenseCount = expenseCount;
+            this.categoryCount = categoryCount;
+        }
+    }
+
+    public static class BackupException extends Exception {
+        public static final int INVALID_FORMAT = 1;
+        public static final int NEWER_VERSION = 2;
+        public static final int UNSUPPORTED_VERSION = 3;
+        public static final int WRITE_FAILED = 4;
+        public final int reason;
+
+        BackupException(int reason) {
+            this.reason = reason;
+        }
     }
 
     public long totalBetween(long start, long end) {

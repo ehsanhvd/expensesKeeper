@@ -6,6 +6,7 @@ import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Canvas;
@@ -16,6 +17,7 @@ import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.Editable;
@@ -30,7 +32,16 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -73,6 +84,11 @@ public class MainActivity extends Activity {
     private static final int ICON_PERIOD = 10;
     private static final int ICON_PARENT = 11;
     private static final int ICON_SHARE = 12;
+    private static final int ICON_BACKUP = 13;
+    private static final int ICON_RESTORE = 14;
+    private static final int REQUEST_CREATE_BACKUP = 8;
+    private static final int REQUEST_OPEN_BACKUP = 9;
+    private static final int MAX_BACKUP_CHARACTERS = 25 * 1024 * 1024;
     private static final Pattern BIDI_NUMERIC_TOKEN = Pattern.compile("[+\\-]?[0-9۰-۹٠-٩][0-9۰-۹٠-٩,٬./:*+\\-]*");
     private static final String LTR_ISOLATE = "\u2066";
     private static final String POP_DIRECTIONAL_ISOLATE = "\u2069";
@@ -168,6 +184,14 @@ public class MainActivity extends Activity {
         return fa ? "حذف دسته" : "Delete category";
     }
 
+    private String deleteExpenseLabel() {
+        return fa ? "حذف خرج" : "Delete expense";
+    }
+
+    private String deleteExpenseMessage() {
+        return fa ? "این خرج و همه دسته‌بندی‌های آن برای همیشه حذف می‌شود." : "This expense and all of its category assignments will be permanently deleted.";
+    }
+
     private String deleteCategoryMessage() {
         return fa ? "این دسته حذف می‌شود. زیر‌دسته‌ها بدون والد می‌شوند و خرج‌ها باقی می‌مانند." : "This category will be removed. Child categories become top-level and expenses are kept.";
     }
@@ -227,6 +251,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         store = new ExpenseStore(this);
+        expenseSortMode = store.expenseSortMode();
         fa = "fa".equals(store.language());
         font = Typeface.create("sans-serif", Typeface.NORMAL);
         if (fa && Build.VERSION.SDK_INT >= 26) {
@@ -275,6 +300,7 @@ public class MainActivity extends Activity {
         if (refreshingScreen || store == null || !store.isConfigured()) return;
         refreshingScreen = true;
         store = new ExpenseStore(this);
+        expenseSortMode = store.expenseSortMode();
         fa = "fa".equals(store.language());
         replacingScreen = true;
         if (currentScreen == SCREEN_DASHBOARD) {
@@ -472,8 +498,19 @@ public class MainActivity extends Activity {
         headline.setPadding(0, dp(6), 0, dp(2));
         headline.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         titleRow.addView(headline);
-        ImageView share = iconButton(ICON_SHARE, surfaceAlt, accent, 40, 16);
-        LinearLayout.LayoutParams shareLp = new LinearLayout.LayoutParams(dp(40), dp(40));
+        LinearLayout share = new LinearLayout(this);
+        share.setOrientation(LinearLayout.HORIZONTAL);
+        share.setGravity(Gravity.CENTER);
+        share.setPadding(dp(10), 0, dp(12), 0);
+        share.setBackground(rounded(accent, dp(18), Color.TRANSPARENT, 0));
+        ImageView shareIcon = iconButton(ICON_SHARE, Color.TRANSPARENT, Color.WHITE, 34, 0);
+        shareIcon.setPadding(dp(6), dp(6), dp(6), dp(6));
+        share.addView(shareIcon);
+        TextView shareLabel = labelText(getString(R.string.share_app_prompt), Color.WHITE);
+        shareLabel.setTextSize(13);
+        shareLabel.setTypeface(font, Typeface.NORMAL);
+        share.addView(shareLabel);
+        LinearLayout.LayoutParams shareLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(40));
         shareLp.setMargins(fa ? dp(10) : dp(12), 0, fa ? dp(12) : dp(10), 0);
         share.setLayoutParams(shareLp);
         share.setContentDescription(getString(R.string.invite_app));
@@ -484,6 +521,7 @@ public class MainActivity extends Activity {
         TextView hint = subtitle(fa ? "خرج ها، دسته ها و دوره ها در یک نگاه" : "Expenses, categories, and periods at a glance");
         hint.setPadding(0, 0, 0, dp(4));
         header.addView(hint);
+
         return header;
     }
 
@@ -982,6 +1020,7 @@ public class MainActivity extends Activity {
 
     private void cycleExpenseSort() {
         expenseSortMode = (expenseSortMode + 1) % 4;
+        store.setExpenseSortMode(expenseSortMode);
         showExpenseDetails(detailLabel, detailStart, detailEnd);
     }
 
@@ -1130,8 +1169,40 @@ public class MainActivity extends Activity {
             dialog.dismiss();
             showCategoryPicker(changeCategoryLabel(), store.categories(), false, line.categoryId, null, category -> changeExpenseCategory(line, category.id));
         }));
+        root.addView(deleteButton(deleteExpenseLabel(), () -> {
+            dialog.dismiss();
+            confirmDeleteExpense(line);
+        }));
         LinearLayout actions = dialogActions();
         actions.addView(dialogButton(cancelLabel(), false, dialog::dismiss));
+        root.addView(actions);
+        showMaterialDialog(dialog, root);
+    }
+
+    private void confirmDeleteExpense(ExpenseLine line) {
+        Dialog dialog = new Dialog(this);
+        LinearLayout root = dialogRoot(deleteExpenseLabel());
+        root.addView(subtitle(deleteExpenseMessage()));
+        long expenseAmount = line.amount;
+        for (ExpenseStore.Expense expense : store.expenses()) {
+            if (expense.id.equals(line.expenseId)) {
+                expenseAmount = expense.amount;
+                break;
+            }
+        }
+        TextView amount = labelText(ExpenseStore.money(expenseAmount, fa), accent2);
+        amount.setTextSize(17);
+        amount.setPadding(0, dp(6), 0, dp(10));
+        root.addView(amount);
+        LinearLayout actions = dialogActions();
+        actions.addView(dialogButton(cancelLabel(), false, dialog::dismiss));
+        TextView delete = dialogButton(deleteLabel(), true, () -> {
+            deleteExpense(line.expenseId);
+            dialog.dismiss();
+            showExpenseDetails(detailLabel, detailStart, detailEnd);
+        });
+        delete.setBackground(rounded(accent2, dp(18), Color.TRANSPARENT, 0));
+        actions.addView(delete);
         root.addView(actions);
         showMaterialDialog(dialog, root);
     }
@@ -1213,12 +1284,127 @@ public class MainActivity extends Activity {
         root.addView(settingsItem(getString(R.string.setup_language), ICON_LANGUAGE, accent, this::showLanguageStep));
         root.addView(settingsItem(getString(R.string.setup_theme), ICON_THEME, accent2, this::showThemeStep));
         root.addView(settingsItem(getString(R.string.setup_period), ICON_PERIOD, accent3, this::showPeriodStep));
+        root.addView(sectionLabel(getString(R.string.backup_restore)));
+        root.addView(settingsItem(getString(R.string.backup_data), ICON_BACKUP, accent, this::chooseBackupDestination));
+        root.addView(settingsItem(getString(R.string.restore_data), ICON_RESTORE, accent2, this::chooseBackupToRestore));
         if (!hasSmsPermission()) {
             root.addView(sectionLabel("SMS"));
             root.addView(subtitle(getString(R.string.sms_permission)));
             root.addView(option(fa ? "فعال کردن دسترسی پیامک" : "Allow SMS access", this::askSmsPermission));
         }
         setContentView(wrap(root));
+    }
+
+    private void chooseBackupDestination() {
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("application/json");
+        String timestamp = new SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.US).format(new Date());
+        intent.putExtra(Intent.EXTRA_TITLE, "ExpenseKeeper-backup-" + timestamp + ".json");
+        startActivityForResult(intent, REQUEST_CREATE_BACKUP);
+    }
+
+    private void chooseBackupToRestore() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/json", "text/json", "text/plain"});
+        startActivityForResult(intent, REQUEST_OPEN_BACKUP);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
+        Uri uri = data.getData();
+        if (requestCode == REQUEST_CREATE_BACKUP) {
+            writeBackup(uri);
+        } else if (requestCode == REQUEST_OPEN_BACKUP) {
+            confirmRestore(uri);
+        }
+    }
+
+    private void writeBackup(Uri uri) {
+        new Thread(() -> {
+            boolean succeeded = false;
+            try {
+                PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);
+                long versionCode = Build.VERSION.SDK_INT >= 28 ? info.getLongVersionCode() : info.versionCode;
+                String versionName = info.versionName == null ? "unknown" : info.versionName;
+                String json = store.createBackup(versionName, versionCode);
+                OutputStream stream = getContentResolver().openOutputStream(uri, "wt");
+                if (stream == null) throw new IOException("No output stream");
+                try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(stream, StandardCharsets.UTF_8))) {
+                    writer.write(json);
+                }
+                succeeded = true;
+            } catch (Exception ignored) {
+            }
+            boolean result = succeeded;
+            runOnUiThread(() -> Toast.makeText(this,
+                    result ? R.string.backup_success : R.string.backup_failed,
+                    Toast.LENGTH_LONG).show());
+        }).start();
+    }
+
+    private void confirmRestore(Uri uri) {
+        Dialog dialog = new Dialog(this);
+        LinearLayout root = dialogRoot(getString(R.string.restore_confirm_title));
+        root.addView(subtitle(getString(R.string.restore_confirm_message)));
+        LinearLayout actions = dialogActions();
+        actions.addView(dialogButton(cancelLabel(), false, dialog::dismiss));
+        TextView restore = dialogButton(getString(R.string.restore_confirm_action), true, () -> {
+            dialog.dismiss();
+            restoreBackup(uri);
+        });
+        restore.setBackground(rounded(accent2, dp(18), Color.TRANSPARENT, 0));
+        actions.addView(restore);
+        root.addView(actions);
+        showMaterialDialog(dialog, root);
+    }
+
+    private void restoreBackup(Uri uri) {
+        new Thread(() -> {
+            try {
+                String json = readBackupText(uri);
+                ExpenseStore.RestoreSummary summary = store.restoreBackup(json);
+                runOnUiThread(() -> {
+                    ExpenseWidgetProvider.updateAll(this);
+                    Toast.makeText(this, getString(R.string.restore_success,
+                            summary.expenseCount, summary.categoryCount), Toast.LENGTH_LONG).show();
+                    recreate();
+                });
+            } catch (ExpenseStore.BackupException e) {
+                runOnUiThread(() -> showRestoreError(e.reason));
+            } catch (Exception e) {
+                runOnUiThread(() -> showRestoreError(ExpenseStore.BackupException.INVALID_FORMAT));
+            }
+        }).start();
+    }
+
+    private String readBackupText(Uri uri) throws IOException {
+        InputStream stream = getContentResolver().openInputStream(uri);
+        if (stream == null) throw new IOException("No input stream");
+        StringBuilder text = new StringBuilder();
+        char[] buffer = new char[8192];
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+            int read;
+            while ((read = reader.read(buffer)) != -1) {
+                if (text.length() + read > MAX_BACKUP_CHARACTERS) throw new IOException("Backup is too large");
+                text.append(buffer, 0, read);
+            }
+        }
+        return text.toString();
+    }
+
+    private void showRestoreError(int reason) {
+        int message = R.string.restore_failed;
+        if (reason == ExpenseStore.BackupException.NEWER_VERSION) {
+            message = R.string.restore_newer_version;
+        } else if (reason == ExpenseStore.BackupException.UNSUPPORTED_VERSION) {
+            message = R.string.restore_unsupported_version;
+        }
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
     }
 
     @Override
@@ -2332,6 +2518,20 @@ public class MainActivity extends Activity {
                 canvas.drawCircle(x1, y1, s * 0.09f, p);
                 canvas.drawCircle(x2, y2, s * 0.09f, p);
                 canvas.drawCircle(x3, y3, s * 0.09f, p);
+            } else if (icon == ICON_BACKUP || icon == ICON_RESTORE) {
+                float trayTop = t + s * 0.67f;
+                canvas.drawLine(l + s * 0.24f, trayTop, l + s * 0.24f, t + s * 0.80f, p);
+                canvas.drawLine(l + s * 0.24f, t + s * 0.80f, l + s * 0.76f, t + s * 0.80f, p);
+                canvas.drawLine(l + s * 0.76f, t + s * 0.80f, l + s * 0.76f, trayTop, p);
+                if (icon == ICON_BACKUP) {
+                    canvas.drawLine(cx, t + s * 0.68f, cx, t + s * 0.22f, p);
+                    canvas.drawLine(cx, t + s * 0.22f, l + s * 0.34f, t + s * 0.39f, p);
+                    canvas.drawLine(cx, t + s * 0.22f, l + s * 0.66f, t + s * 0.39f, p);
+                } else {
+                    canvas.drawLine(cx, t + s * 0.20f, cx, t + s * 0.66f, p);
+                    canvas.drawLine(cx, t + s * 0.66f, l + s * 0.34f, t + s * 0.49f, p);
+                    canvas.drawLine(cx, t + s * 0.66f, l + s * 0.66f, t + s * 0.49f, p);
+                }
             }
         }
 
