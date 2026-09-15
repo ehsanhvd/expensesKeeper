@@ -28,6 +28,10 @@
     <string name="share_app_chooser">Share ExpenseKeeper</string>
     <string name="share_app_prompt">Share app</string>
     <string name="share_app_message">Take control of your spending with %1$s — a simple way to track expenses and stay organized. Try it today!\n%2$s</string>
+    <string name="widget_spending_speed">SPEND SPEED</string>
+    <string name="widget_daily_average_30">avg/day · 30 days</string>
+    <string name="widget_speed_picker_description">30-day daily spending speedometer</string>
+    <string name="widget_speed_description">Spending speed: %1$s average per day over the last 30 days</string>
     <string name="backup_restore">Backup and restore</string>
     <string name="backup_data">Create backup</string>
     <string name="restore_data">Restore backup</string>

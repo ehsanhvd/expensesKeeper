@@ -28,6 +28,10 @@
     <string name="share_app_chooser">اشتراک‌گذاری خرج‌نگار</string>
     <string name="share_app_prompt">معرفی به دوستان</string>
     <string name="share_app_message">با %1$s خرج‌هایت را ساده مدیریت کن، هزینه‌ها را زیر نظر بگیر و همیشه منظم بمان. همین امروز امتحانش کن!\n%2$s</string>
+    <string name="widget_spending_speed">سرعت خرج</string>
+    <string name="widget_daily_average_30">میانگین/روز · ۳۰ روز</string>
+    <string name="widget_speed_picker_description">سرعت‌سنج میانگین خرج روزانه در ۳۰ روز</string>
+    <string name="widget_speed_description">سرعت خرج: میانگین روزانه %1$s در ۳۰ روز گذشته</string>
     <string name="backup_restore">پشتیبان‌گیری و بازیابی</string>
     <string name="backup_data">ساخت فایل پشتیبان</string>
     <string name="restore_data">بازیابی فایل پشتیبان</string>

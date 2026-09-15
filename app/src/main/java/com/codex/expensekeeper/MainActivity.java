@@ -1118,8 +1118,16 @@ public class MainActivity extends Activity {
             item.addView(title(ExpenseStore.money(line.amount, fa), 15));
             item.addView(subtitle(formatDateTime(line.time)));
             item.addView(subtitle(shortText(line.description == null || line.description.isEmpty() ? (fa ? "بدون توضیح" : "No description") : line.description)));
-            item.addView(labelText(changeCategoryLabel(), accent));
-            item.setOnClickListener(v -> showChangeExpenseCategory(line));
+            LinearLayout itemActions = dialogActions();
+            TextView changeCategory = dialogButton(changeCategoryLabel(), false, () ->
+                    showCategoryPicker(changeCategoryLabel(), store.categories(), false, line.categoryId, null,
+                            selectedCategory -> changeExpenseCategory(line, selectedCategory.id)));
+            changeCategory.setBackground(rounded(surface, dp(18), outline, dp(1)));
+            itemActions.addView(changeCategory);
+            TextView deleteExpense = dialogButton(deleteLabel(), true, () -> confirmDeleteExpense(line));
+            deleteExpense.setBackground(rounded(accent2, dp(18), Color.TRANSPARENT, 0));
+            itemActions.addView(deleteExpense);
+            item.addView(itemActions);
             details.addView(item);
         }
         card.addView(details);
@@ -1160,24 +1168,6 @@ public class MainActivity extends Activity {
         groups.get(categoryId).add(line);
     }
 
-    private void showChangeExpenseCategory(ExpenseLine line) {
-        Dialog dialog = new Dialog(this);
-        LinearLayout root = dialogRoot(changeCategoryLabel());
-        root.addView(subtitle(ExpenseStore.money(line.amount, fa)));
-        root.addView(subtitle(shortText(line.description == null || line.description.isEmpty() ? (fa ? "بدون توضیح" : "No description") : line.description)));
-        root.addView(option(changeCategoryLabel(), () -> {
-            dialog.dismiss();
-            showCategoryPicker(changeCategoryLabel(), store.categories(), false, line.categoryId, null, category -> changeExpenseCategory(line, category.id));
-        }));
-        root.addView(deleteButton(deleteExpenseLabel(), () -> {
-            dialog.dismiss();
-            confirmDeleteExpense(line);
-        }));
-        LinearLayout actions = dialogActions();
-        actions.addView(dialogButton(cancelLabel(), false, dialog::dismiss));
-        root.addView(actions);
-        showMaterialDialog(dialog, root);
-    }
 
     private void confirmDeleteExpense(ExpenseLine line) {
         Dialog dialog = new Dialog(this);
@@ -1308,7 +1298,6 @@ public class MainActivity extends Activity {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("*/*");
-        intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/json", "text/json", "text/plain"});
         startActivityForResult(intent, REQUEST_OPEN_BACKUP);
     }
 

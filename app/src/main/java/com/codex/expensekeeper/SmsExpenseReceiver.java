@@ -19,13 +19,16 @@ public class SmsExpenseReceiver extends BroadcastReceiver {
     private static final Pattern MINUS_AMOUNT = Pattern.compile("(?m)^\\s*-\\s*([0-9,۰-۹٠-٩]+)\\s*$");
     private static final Pattern SMS_TIME = Pattern.compile("(\\d{2,4}/\\d{1,2}/\\d{1,2}[_\\s-]+\\d{2}:\\d{2}|\\d{6}[-_\\s]+\\d{2}:\\d{2}|\\d{1,2}/\\d{1,2}[-_\\s]+\\d{2}:\\d{2}|\\d{4}\\s*-\\s*\\d{2}:\\d{2})");
     private static final Pattern KARAFARIN_PURCHASE_OTP = Pattern.compile("(?ms)^\\s*بانک\\s+کارآفرین\\s*\\R\\s*خرید\\s*\\R\\s*[^\\r\\n]+\\s*\\R\\s*مبلغ\\s*[:：]\\s*[0-9,۰-۹٠-٩]+\\s*\\R\\s*رمز\\s*[:：]");
+    private static final Pattern PASARGAD_PURCHASE_OTP = Pattern.compile("(?ms)^\\s*(?:بانک\\s+)?پاسارگاد\\s*\\R\\s*خرید\\s*\\R\\s*[^\\r\\n]+\\s*\\R\\s*مبلغ\\s*[:：]\\s*[0-9,۰-۹٠-٩]+(?:\\s*(?:ریال|تومان))?\\s*\\R\\s*رمز\\s*[:：]");
+    private static final Pattern SPLIT_LABELLED_AMOUNT = Pattern.compile("(?m)(^\\s*مبلغ\\s*[:：]\\s*[0-9,]+)\\R\\s*([0-9,]+\\s*(?:ریال|تومان)\\s*$)");
 
     @Override
     public void onReceive(Context context, Intent intent) {
         if (!Telephony.Sms.Intents.SMS_RECEIVED_ACTION.equals(intent.getAction())) return;
         StringBuilder body = new StringBuilder();
         for (SmsMessage msg : Telephony.Sms.Intents.getMessagesFromIntent(intent)) {
-            body.append(msg.getMessageBody()).append('\n');
+            String part = msg.getMessageBody();
+            if (part != null) body.append(part);
         }
         SmsEvent event = parseSmsEvent(body.toString());
         if (event == null || event.amountRial <= 0) return;
@@ -60,7 +63,8 @@ public class SmsExpenseReceiver extends BroadcastReceiver {
 
     private static SmsEvent parseSmsEvent(String body) {
         String normalized = normalizeText(body);
-        if (KARAFARIN_PURCHASE_OTP.matcher(normalized).find()) return null;
+        if (KARAFARIN_PURCHASE_OTP.matcher(normalized).find()
+                || PASARGAD_PURCHASE_OTP.matcher(normalized).find()) return null;
         Long amount = null;
         Matcher minus = MINUS_AMOUNT.matcher(normalized);
         boolean minusMatched = minus.find();
@@ -141,12 +145,13 @@ public class SmsExpenseReceiver extends BroadcastReceiver {
     }
 
     private static String normalizeText(String s) {
-        return normalizeDigits(s)
+        String normalized = normalizeDigits(s)
                 .replace('ي', 'ی')
                 .replace('ك', 'ک')
                 .replace("خريد", "خرید")
                 .replace("ريال", "ریال")
                 .replace("پايانه", "پایانه");
+        return SPLIT_LABELLED_AMOUNT.matcher(normalized).replaceAll("$1$2");
     }
 
     private static String normalizeDigits(String s) {
