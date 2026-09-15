@@ -20,6 +20,7 @@ public class ExpenseWidgetProvider extends AppWidgetProvider {
         AppWidgetManager manager = AppWidgetManager.getInstance(context);
         int[] ids = manager.getAppWidgetIds(new ComponentName(context, ExpenseWidgetProvider.class));
         for (int id : ids) update(context, manager, id);
+        SpendingSpeedWidgetProvider.updateAll(context);
     }
 
     private static void update(Context context, AppWidgetManager manager, int id) {
