@@ -1,0 +1,29 @@
+<resources>
+    <string name="split_title">Split this expense</string>
+    <string name="split_intro">One payment, several categories. Choose a category and enter an amount for each part. The parts must add up to the original payment.</string>
+    <string name="split_equal">Split total equally</string>
+    <string name="split_add">＋ Add another part</string>
+    <string name="split_part">Part %1$s</string>
+    <string name="split_remove">Remove</string>
+    <string name="split_remove_part">Remove %1$s</string>
+    <string name="split_category">Category · tap to choose or change</string>
+    <string name="split_choose">Choose a category</string>
+    <string name="split_amount">Amount (Toman)</string>
+    <string name="split_amount_hint">Enter this part’s amount</string>
+    <string name="split_use_remaining">Use remaining amount</string>
+    <string name="split_save">Save split</string>
+    <string name="split_invalid">Check the amounts. Use whole, positive numbers that fit within the payment total.</string>
+    <string name="split_over">%1$s over the total — reduce an amount.</string>
+    <string name="split_left">%1$s left to assign</string>
+    <string name="split_empty_amount">Give every part an amount, or remove the empty part.</string>
+    <string name="split_missing_category">Choose a category for every part.</string>
+    <string name="split_ready">All assigned. Review the parts, then save.</string>
+    <string name="split_discard_title">Discard these changes?</string>
+    <string name="split_discard_message">Your original expense is unchanged. This unsaved split will be lost.</string>
+    <string name="split_keep_editing">Keep editing</string>
+    <string name="split_discard">Discard changes</string>
+    <string name="split_changed">This expense changed or was removed. Close this editor and reopen the expense to continue.</string>
+    <string name="split_saved">Split saved</string>
+    <string name="split_restore_failed">Could not restore the unsaved split. Your original expense is unchanged.</string>
+    <string name="split_edit">Edit whole expense split</string>
+</resources>

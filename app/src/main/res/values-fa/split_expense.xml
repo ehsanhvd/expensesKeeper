@@ -1,0 +1,29 @@
+<resources>
+    <string name="split_title">تقسیم این خرج</string>
+    <string name="split_intro">یک پرداخت، چند دسته. برای هر بخش یک دسته انتخاب کن و مبلغش را بنویس. جمع بخش‌ها باید برابر با مبلغ اصلی پرداخت باشد.</string>
+    <string name="split_equal">تقسیم مساوی کل مبلغ</string>
+    <string name="split_add">＋ افزودن بخش دیگر</string>
+    <string name="split_part">بخش %1$s</string>
+    <string name="split_remove">حذف بخش</string>
+    <string name="split_remove_part">حذف %1$s</string>
+    <string name="split_category">دسته · برای انتخاب یا تغییر لمس کن</string>
+    <string name="split_choose">انتخاب دسته</string>
+    <string name="split_amount">مبلغ (تومان)</string>
+    <string name="split_amount_hint">مبلغ این بخش را وارد کن</string>
+    <string name="split_use_remaining">قرار دادن مبلغ باقی‌مانده</string>
+    <string name="split_save">ذخیره تقسیم</string>
+    <string name="split_invalid">مبلغ‌ها را بررسی کن. عدد صحیح و مثبت وارد کن که از کل پرداخت بیشتر نباشد.</string>
+    <string name="split_over">%1$s بیشتر از کل مبلغ؛ یکی از مبلغ‌ها را کم کن.</string>
+    <string name="split_left">%1$s مانده تا کامل شود</string>
+    <string name="split_empty_amount">برای هر بخش مبلغ بنویس یا بخش خالی را حذف کن.</string>
+    <string name="split_missing_category">برای همه بخش‌ها دسته انتخاب کن.</string>
+    <string name="split_ready">همه مبلغ تقسیم شد. بخش‌ها را بررسی و ذخیره کن.</string>
+    <string name="split_discard_title">تغییرات کنار گذاشته شود؟</string>
+    <string name="split_discard_message">خرج اصلی تغییری نکرده است. این تقسیمِ ذخیره‌نشده از دست می‌رود.</string>
+    <string name="split_keep_editing">ادامه ویرایش</string>
+    <string name="split_discard">کنار گذاشتن تغییرات</string>
+    <string name="split_changed">این خرج تغییر کرده یا حذف شده است. ویرایشگر را ببند و خرج را دوباره باز کن.</string>
+    <string name="split_saved">تقسیم خرج ذخیره شد</string>
+    <string name="split_restore_failed">بازیابی تقسیم ذخیره‌نشده ممکن نشد. خرج اصلی تغییری نکرده است.</string>
+    <string name="split_edit">ویرایش تقسیم کل خرج</string>
+</resources>

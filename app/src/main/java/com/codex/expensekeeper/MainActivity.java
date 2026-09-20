@@ -26,12 +26,15 @@ import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.ProgressBar;
+import android.content.res.ColorStateList;
 import android.widget.Toast;
 
 import java.io.BufferedReader;
@@ -117,6 +120,10 @@ public class MainActivity extends Activity {
     private long detailEnd;
     private String detailLabel = "";
     private final ArrayList<Integer> backStack = new ArrayList<>();
+    private SplitEditor splitEditor;
+    private ScreenTransitionHost screenHost;
+    private boolean animateNextScreen;
+    private boolean nextScreenBackwards;
 
     private interface CategoryCallback {
         void onPicked(ExpenseStore.Category category);
@@ -142,10 +149,6 @@ public class MainActivity extends Activity {
 
     private String mainCategoryLabel() {
         return fa ? "دسته اصلی" : "Main category";
-    }
-
-    private String moreSplitsLabel() {
-        return fa ? "تقسیم بیشتر" : "More splits";
     }
 
     private String parentCategoryLabel() {
@@ -212,20 +215,12 @@ public class MainActivity extends Activity {
         return fa ? "تقسیم بین چند دسته" : "Split into categories";
     }
 
-    private String addSplitLabel() {
-        return fa ? "افزودن دسته" : "Add category";
-    }
-
     private String changeCategoryLabel() {
         return fa ? "تغییر دسته" : "Change category";
     }
 
     private String totalLabel(long amount) {
         return (fa ? "کل مبلغ: " : "Total: ") + ExpenseStore.money(amount, fa);
-    }
-
-    private String remainingLabel(long amount) {
-        return (fa ? "باقی‌مانده: " : "Remaining: ") + ExpenseStore.money(amount, fa);
     }
 
     private String ignoreDeleteMessage() {
@@ -272,9 +267,43 @@ public class MainActivity extends Activity {
                 showDashboardHome();
             }
             askSmsPermission();
+            if (savedInstanceState != null && savedInstanceState.containsKey("split_editor")) {
+                Bundle draftState = savedInstanceState.getBundle("split_editor");
+                try {
+                    ExpenseStore.Expense original = ExpenseStore.Expense.fromJson(
+                            new org.json.JSONObject(draftState.getString("expense")));
+                    splitEditor = new SplitEditor(original, draftState);
+                    splitEditor.show();
+                } catch (org.json.JSONException ignored) {
+                    Toast.makeText(this, R.string.split_restore_failed, Toast.LENGTH_LONG).show();
+                }
+            }
         } else {
             showLanguageStep();
         }
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle state) {
+        super.onSaveInstanceState(state);
+        if (splitEditor != null) state.putBundle("split_editor", splitEditor.snapshot());
+    }
+
+    @Override
+    protected void onPause() {
+        if (screenHost != null) screenHost.finishTransition();
+        super.onPause();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (screenHost != null) screenHost.finishTransition();
+        if (splitEditor != null) {
+            if (splitEditor.categoryDialog != null) splitEditor.categoryDialog.dismiss();
+            if (splitEditor.discardDialog != null) splitEditor.discardDialog.dismiss();
+            splitEditor.dialog.dismiss();
+        }
+        super.onDestroy();
     }
 
     @Override
@@ -361,7 +390,7 @@ public class MainActivity extends Activity {
             root.addView(flexibleSpacer());
             root.addView(supportedSmsStyles());
         }
-        setContentView(wrap(root));
+        showScreenContent(wrap(root));
     }
 
     private void showThemeStep() {
@@ -384,7 +413,7 @@ public class MainActivity extends Activity {
             applyPalette();
             afterThemePicked();
         }));
-        setContentView(wrap(root));
+        showScreenContent(wrap(root));
     }
 
     private void afterThemePicked() {
@@ -436,7 +465,7 @@ public class MainActivity extends Activity {
             grid.addView(line);
         }
         root.addView(grid);
-        setContentView(wrap(root));
+        showScreenContent(wrap(root));
     }
 
     private void showDashboard() {
@@ -450,7 +479,7 @@ public class MainActivity extends Activity {
         root.addView(homeActions());
         root.addView(sectionLabel(getString(R.string.uncategorized)));
         addUncategorized(root);
-        setContentView(wrap(root));
+        showScreenContent(wrap(root));
         ExpenseWidgetProvider.updateAll(this);
     }
 
@@ -598,7 +627,7 @@ public class MainActivity extends Activity {
             if (e.amount > 0) store.addExpense(e);
             showDashboardHome();
         }));
-        setContentView(wrap(box));
+        showScreenContent(wrap(box));
     }
 
     private void showUncategorizedExpenseActions(ExpenseStore.Expense expense) {
@@ -611,7 +640,6 @@ public class MainActivity extends Activity {
         }));
         root.addView(option(splitExpenseLabel(), () -> {
             dialog.dismiss();
-            expense.splits.clear();
             showSplitDialog(expense);
         }));
         root.addView(subtitle(ignoreDeleteMessage()));
@@ -635,115 +663,322 @@ public class MainActivity extends Activity {
     }
 
     private void showSplitDialog(ExpenseStore.Expense expense) {
-        if (store != null) {
-            Dialog dialog = new Dialog(this);
-            LinearLayout root = dialogRoot(splitExpenseLabel());
-            root.addView(subtitle(totalLabel(expense.amount)));
-            root.addView(subtitle(remainingLabel(Math.max(0, expense.amount - splitSum(expense)))));
-            for (ExpenseStore.Split split : expense.splits) {
-                root.addView(labelText(categoryName(split.categoryId) + "  " + ExpenseStore.money(split.amount, fa), accent));
+        splitEditor = new SplitEditor(expense, null);
+        splitEditor.show();
+    }
+
+    /** One reviewable draft; category selection never dismisses the amount editor. */
+    private class SplitEditor {
+        final ExpenseStore.Expense original;
+        final ExpenseSplitDraft draft;
+        final Dialog dialog;
+        Dialog categoryDialog;
+        AlertDialog discardDialog;
+        final ArrayList<EditText> amountInputs = new ArrayList<>();
+        final ArrayList<TextView> remainderButtons = new ArrayList<>();
+        LinearLayout rows;
+        ScrollView scroll;
+        TextView balanceText, saveButton, equalButton;
+        ProgressBar progress;
+        String initialSignature;
+        int savedScroll;
+
+        SplitEditor(ExpenseStore.Expense expense, Bundle saved) {
+            original = expense;
+            draft = new ExpenseSplitDraft(expense.amount);
+            if (saved != null) {
+                ArrayList<String> categories = saved.getStringArrayList("categories");
+                ArrayList<String> amounts = saved.getStringArrayList("amounts");
+                for (int i = 0; i < categories.size(); i++) {
+                    draft.parts.add(new ExpenseSplitDraft.Part(categories.get(i), amounts.get(i)));
+                }
+                initialSignature = saved.getString("initial");
+                savedScroll = saved.getInt("scroll");
+            } else {
+                for (ExpenseStore.Split split : expense.splits) {
+                    draft.parts.add(new ExpenseSplitDraft.Part(split.categoryId, String.valueOf(split.amount)));
+                }
+                while (draft.parts.size() < 2) draft.parts.add(new ExpenseSplitDraft.Part("", ""));
+                initialSignature = signature();
             }
+            dialog = new Dialog(MainActivity.this) {
+                @Override public void onBackPressed() { requestClose(); }
+            };
+            dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
+            dialog.setCanceledOnTouchOutside(false);
+        }
+
+        Bundle snapshot() {
+            Bundle state = new Bundle();
+            state.putString("expense", original.toJson().toString());
+            ArrayList<String> categories = new ArrayList<>(), amounts = new ArrayList<>();
+            for (ExpenseSplitDraft.Part part : draft.parts) {
+                categories.add(part.categoryId);
+                amounts.add(part.amount);
+            }
+            state.putStringArrayList("categories", categories);
+            state.putStringArrayList("amounts", amounts);
+            state.putString("initial", initialSignature);
+            state.putInt("scroll", scroll == null ? 0 : scroll.getScrollY());
+            return state;
+        }
+
+        String signature() {
+            org.json.JSONArray values = new org.json.JSONArray();
+            for (ExpenseSplitDraft.Part part : draft.parts) {
+                values.put(part.categoryId);
+                values.put(part.amount);
+            }
+            return values.toString();
+        }
+
+        void show() {
+            LinearLayout root = base();
+            root.setPadding(dp(16), dp(12), dp(16), dp(12));
+            root.addView(title(getString(R.string.split_title), 22));
+            TextView paymentTotal = title(totalLabel(original.amount), 18);
+            paymentTotal.setTextColor(accent);
+            root.addView(paymentTotal);
+
+            scroll = new ScrollView(MainActivity.this);
+            scroll.setFillViewport(true);
+            LinearLayout body = new LinearLayout(MainActivity.this);
+            body.setOrientation(LinearLayout.VERTICAL);
+            body.setFocusableInTouchMode(true);
+            body.addView(subtitle(getString(R.string.split_intro)));
+            if (!original.description.isEmpty()) {
+                TextView description = subtitle(original.description);
+                description.setMaxLines(2);
+                description.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                description.setOnClickListener(v -> description.setMaxLines(Integer.MAX_VALUE));
+                body.addView(description);
+            }
+            equalButton = dialogButton(getString(R.string.split_equal), false, () -> {
+                if (draft.divideEqually()) {
+                    for (int i = 0; i < amountInputs.size(); i++) {
+                        String value = draft.parts.get(i).amount;
+                        amountInputs.get(i).setText(fa ? ExpenseStore.toPersianDigits(value) : value);
+                    }
+                    updateBalance();
+                }
+            });
+            body.addView(equalButton, fullButtonParams());
+            rows = new LinearLayout(MainActivity.this);
+            rows.setOrientation(LinearLayout.VERTICAL);
+            body.addView(rows);
+            TextView add = dialogButton(getString(R.string.split_add), false, () -> {
+                draft.parts.add(new ExpenseSplitDraft.Part("", ""));
+                renderRows();
+                scroll.post(() -> scroll.smoothScrollTo(0, rows.getBottom()));
+            });
+            add.setMinHeight(dp(48));
+            body.addView(add, fullButtonParams());
+            scroll.addView(body);
+            root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+
+            LinearLayout footer = new LinearLayout(MainActivity.this);
+            footer.setOrientation(LinearLayout.VERTICAL);
+            footer.setPadding(0, dp(8), 0, 0);
+            progress = new ProgressBar(MainActivity.this, null, android.R.attr.progressBarStyleHorizontal);
+            progress.setMax(1000);
+            progress.setProgressBackgroundTintList(ColorStateList.valueOf(surfaceAlt));
+            progress.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            footer.addView(progress, new LinearLayout.LayoutParams(-1, dp(6)));
+            balanceText = subtitle("");
+            balanceText.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
+            footer.addView(balanceText);
             LinearLayout actions = dialogActions();
-            actions.addView(dialogButton(cancelLabel(), false, dialog::dismiss));
-            if (expense.amount - splitSum(expense) > 0) {
-                actions.addView(dialogButton(addSplitLabel(), false, () -> {
-                    dialog.dismiss();
-                    showCategoryPicker(splitExpenseLabel(), store.categories(), false, "", null, category -> askSplitAmount(expense, category));
+            TextView cancel = dialogButton(cancelLabel(), false, this::requestClose);
+            LinearLayout.LayoutParams cancelParams = (LinearLayout.LayoutParams) cancel.getLayoutParams();
+            cancelParams.height = dp(48);
+            actions.addView(cancel);
+            saveButton = dialogButton(getString(R.string.split_save), true, this::save);
+            LinearLayout.LayoutParams saveParams = (LinearLayout.LayoutParams) saveButton.getLayoutParams();
+            saveParams.height = dp(48);
+            actions.addView(saveButton);
+            footer.addView(actions);
+            root.addView(footer);
+            renderRows();
+            dialog.setContentView(root);
+            dialog.setOnDismissListener(d -> { if (splitEditor == this) splitEditor = null; });
+            dialog.show();
+            if (dialog.getWindow() != null) {
+                dialog.getWindow().setBackgroundDrawable(new ColorDrawable(bg));
+                dialog.getWindow().setLayout(-1, -1);
+                dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+                        | WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
+            }
+            scroll.post(() -> scroll.scrollTo(0, savedScroll));
+        }
+
+        LinearLayout.LayoutParams fullButtonParams() {
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+            params.setMargins(0, dp(6), 0, dp(6));
+            return params;
+        }
+
+        void renderRows() {
+            rows.removeAllViews();
+            amountInputs.clear();
+            remainderButtons.clear();
+            for (ExpenseSplitDraft.Part part : draft.parts) {
+                int index = amountInputs.size() + 1;
+                LinearLayout row = card();
+                LinearLayout heading = dialogActions();
+                heading.setPadding(0, 0, 0, 0);
+                String partLabel = getString(R.string.split_part, ExpenseStore.localNumber(index, fa));
+                TextView name = labelText(partLabel, muted);
+                heading.addView(name, new LinearLayout.LayoutParams(0, -2, 1));
+                TextView remove = dialogButton(getString(R.string.split_remove), false, () -> {
+                    draft.parts.remove(part);
+                    renderRows();
+                });
+                remove.setContentDescription(getString(R.string.split_remove_part, partLabel));
+                heading.addView(remove, new LinearLayout.LayoutParams(-2, dp(48)));
+                row.addView(heading);
+                TextView category = pickerRow(ICON_CATEGORY, getString(R.string.split_category),
+                        part.categoryId.isEmpty() ? getString(R.string.split_choose) : categoryName(part.categoryId));
+                category.setOnClickListener(v -> chooseCategory(part, category));
+                category.setContentDescription(partLabel + ", " + category.getText());
+                row.addView(category);
+                TextView amountLabel = labelText(getString(R.string.split_amount), muted);
+                row.addView(amountLabel);
+                EditText amount = input(getString(R.string.split_amount_hint), InputType.TYPE_CLASS_NUMBER);
+                amount.setId(View.generateViewId());
+                amountLabel.setLabelFor(amount.getId());
+                amount.setContentDescription(partLabel + ", " + getString(R.string.split_amount));
+                amount.setText(fa ? ExpenseStore.toPersianDigits(part.amount) : part.amount);
+                row.addView(amount);
+                amountInputs.add(amount);
+                TextView formatted = subtitle("");
+                formatted.setVisibility(View.GONE);
+                row.addView(formatted);
+                amount.addTextChangedListener(new TextWatcher() {
+                    @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+                    @Override public void onTextChanged(CharSequence s, int start, int before, int count) { }
+                    @Override public void afterTextChanged(Editable value) {
+                        part.amount = value.toString();
+                        long parsed = ExpenseSplitDraft.parseAmount(part.amount);
+                        amount.setError(parsed < 0 ? getString(R.string.split_invalid) : null);
+                        formatted.setVisibility(parsed > 0 ? View.VISIBLE : View.GONE);
+                        formatted.setText(parsed > 0 ? ExpenseStore.money(parsed, fa) : "");
+                        updateBalance();
+                    }
+                });
+                long parsed = ExpenseSplitDraft.parseAmount(part.amount);
+                formatted.setVisibility(parsed > 0 ? View.VISIBLE : View.GONE);
+                formatted.setText(parsed > 0 ? ExpenseStore.money(parsed, fa) : "");
+                TextView remaining = dialogButton(getString(R.string.split_use_remaining), false, () -> {
+                    long available = draft.remainingFor(part);
+                    if (available > 0) amount.setText(ExpenseStore.localNumber(available, fa));
+                });
+                remaining.setContentDescription(partLabel + ", " + getString(R.string.split_use_remaining));
+                remaining.setMinHeight(dp(48));
+                row.addView(remaining, fullButtonParams());
+                remainderButtons.add(remaining);
+                rows.addView(row);
+            }
+            updateBalance();
+        }
+
+        void chooseCategory(ExpenseSplitDraft.Part part, TextView categoryView) {
+            categoryDialog = new Dialog(MainActivity.this);
+            Dialog picker = categoryDialog;
+            LinearLayout root = dialogRoot(getString(R.string.split_choose));
+            ScrollView listScroll = new ScrollView(MainActivity.this);
+            LinearLayout list = new LinearLayout(MainActivity.this);
+            list.setOrientation(LinearLayout.VERTICAL);
+            for (ExpenseStore.Category category : store.categories()) {
+                String label = category.label(fa);
+                if (!category.parentId.isEmpty()) label = categoryName(category.parentId) + " / " + label;
+                list.addView(categoryPickerItem(category, label, category.id.equals(part.categoryId), picker, selected -> {
+                    part.categoryId = selected.id;
+                    categoryView.setText(localText(getString(R.string.split_category) + "\n" + selected.label(fa)));
+                    categoryView.setContentDescription(categoryView.getText());
+                    updateBalance();
                 }));
             }
-            if (!expense.splits.isEmpty() && expense.amount - splitSum(expense) <= 0) {
-                actions.addView(dialogButton(getString(R.string.done), true, () -> {
-                    dialog.dismiss();
-                    saveExpenseAndShowDashboard(expense);
-                }));
-            }
+            listScroll.addView(list);
+            root.addView(listScroll, new LinearLayout.LayoutParams(-1,
+                    Math.min(dp(360), getResources().getDisplayMetrics().heightPixels / 2)));
+            LinearLayout actions = dialogActions();
+            actions.addView(dialogButton(cancelLabel(), false, picker::dismiss));
             root.addView(actions);
-            showMaterialDialog(dialog, root);
-            return;
+            picker.setOnDismissListener(d -> categoryDialog = null);
+            showMaterialDialog(picker, root);
         }
-        List<ExpenseStore.Category> cats = store.categories();
-        String[] labels = new String[cats.size()];
-        for (int i = 0; i < cats.size(); i++) labels[i] = cats.get(i).label(fa);
-        new AlertDialog.Builder(this)
-                .setTitle(fa ? "دسته اصلی" : "Main category")
-                .setItems(labels, (dialog, which) -> askSplitAmount(expense, cats.get(which)))
-                .setNegativeButton(android.R.string.cancel, null)
-                .show();
-    }
 
-    private void askSplitAmount(ExpenseStore.Expense expense, ExpenseStore.Category category) {
-        if (store != null) {
-            Dialog dialog = new Dialog(this);
-            LinearLayout box = dialogRoot(splitExpenseLabel());
-            long remaining = Math.max(0, expense.amount - splitSum(expense));
-            box.addView(labelText(category.label(fa), accent));
-            box.addView(subtitle(remainingLabel(remaining)));
-            EditText amount = input(getString(R.string.amount), InputType.TYPE_CLASS_NUMBER);
-            amount.setText(ExpenseStore.localNumber(remaining, fa));
-            box.addView(amount);
-            box.addView(amountWordsView(amount));
-            LinearLayout actions = dialogActions();
-            actions.addView(dialogButton(cancelLabel(), false, dialog::dismiss));
-            actions.addView(dialogButton(moreSplitsLabel(), false, () -> {
-                long value = parseLong(amount.getText().toString());
-                value = Math.min(value, Math.max(0, expense.amount - splitSum(expense)));
-                if (value > 0) expense.splits.add(new ExpenseStore.Split(category.id, value));
-                dialog.dismiss();
-                if (expense.amount - splitSum(expense) > 0) {
-                    showSplitDialog(expense);
-                } else {
-                    saveExpenseAndShowDashboard(expense);
-                }
-            }));
-            actions.addView(dialogButton(getString(R.string.save), true, () -> {
-                long value = parseLong(amount.getText().toString());
-                value = Math.min(value, Math.max(0, expense.amount - splitSum(expense)));
-                if (value > 0) expense.splits.add(new ExpenseStore.Split(category.id, value));
-                dialog.dismiss();
-                if (expense.amount - splitSum(expense) > 0) {
-                    showSplitDialog(expense);
-                } else {
-                    saveExpenseAndShowDashboard(expense);
-                }
-            }));
-            box.addView(actions);
-            showMaterialDialog(dialog, box);
-            return;
+        void updateBalance() {
+            ExpenseSplitDraft.Balance balance = draft.balance();
+            boolean invalid = balance.invalidAmount || balance.overflow;
+            String message;
+            if (invalid) message = getString(R.string.split_invalid);
+            else if (balance.remaining < 0) message = getString(R.string.split_over, ExpenseStore.money(-balance.remaining, fa));
+            else if (balance.remaining > 0) message = getString(R.string.split_left, ExpenseStore.money(balance.remaining, fa));
+            else if (balance.missingAmount) message = getString(R.string.split_empty_amount);
+            else if (balance.missingCategory) message = getString(R.string.split_missing_category);
+            else message = getString(R.string.split_ready);
+            balanceText.setText(localText(message));
+            balanceText.setTextColor(invalid || balance.remaining < 0 ? accent2 : accent);
+            progress.setProgressTintList(ColorStateList.valueOf(invalid || balance.remaining < 0 ? accent2 : accent));
+            progress.setProgress((int) Math.min(1000, balance.allocated * 1000d / Math.max(1, draft.total)));
+            saveButton.setEnabled(balance.ready());
+            saveButton.setAlpha(balance.ready() ? 1f : .45f);
+            boolean canDivide = draft.parts.size() > 1 && draft.total >= draft.parts.size();
+            equalButton.setEnabled(canDivide);
+            equalButton.setAlpha(canDivide ? 1f : .45f);
+            equalButton.setMinHeight(dp(48));
+            for (int i = 0; i < remainderButtons.size(); i++) {
+                boolean available = draft.remainingFor(draft.parts.get(i)) > 0;
+                remainderButtons.get(i).setEnabled(available);
+                remainderButtons.get(i).setAlpha(available ? 1f : .45f);
+            }
         }
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        EditText amount = input(getString(R.string.amount), InputType.TYPE_CLASS_NUMBER);
-        EditText desc = input(getString(R.string.description), InputType.TYPE_CLASS_TEXT);
-        amount.setText(ExpenseStore.localNumber(expense.amount - splitSum(expense), fa));
-        desc.setText(expense.description);
-        box.addView(amount);
-        box.addView(amountWordsView(amount));
-        box.addView(desc);
-        new AlertDialog.Builder(this)
-                .setTitle(category.label(fa))
-                .setView(box)
-                .setPositiveButton(getString(R.string.save), (d, w) -> {
-                    long value = parseLong(amount.getText().toString());
-                    expense.description = desc.getText().toString();
-                    if (value > 0) expense.splits.add(new ExpenseStore.Split(category.id, value));
-                    List<ExpenseStore.Expense> all = store.expenses();
-                    for (int i = 0; i < all.size(); i++) if (all.get(i).id.equals(expense.id)) all.set(i, expense);
-                    store.saveExpenses(all);
-                    showDashboardHome();
-                })
-                .setNeutralButton(fa ? "تقسیم بیشتر" : "More splits", (d, w) -> {
-                    long value = parseLong(amount.getText().toString());
-                    expense.description = desc.getText().toString();
-                    if (value > 0) expense.splits.add(new ExpenseStore.Split(category.id, value));
-                    showSplitDialog(expense);
-                })
-                .show();
-    }
 
-    private long splitSum(ExpenseStore.Expense expense) {
-        long sum = 0;
-        for (ExpenseStore.Split s : expense.splits) sum += s.amount;
-        return sum;
+        void requestClose() {
+            if (signature().equals(initialSignature)) { dialog.dismiss(); return; }
+            discardDialog = new AlertDialog.Builder(MainActivity.this)
+                    .setTitle(R.string.split_discard_title)
+                    .setMessage(R.string.split_discard_message)
+                    .setNegativeButton(R.string.split_keep_editing, (d, w) -> { })
+                    .setPositiveButton(R.string.split_discard, (d, w) -> dialog.dismiss()).create();
+            discardDialog.show();
+        }
+
+        void save() {
+            if (!draft.balance().ready()) return;
+            for (ExpenseSplitDraft.Part part : draft.parts) {
+                if (categoryById(part.categoryId) == null) {
+                    Toast.makeText(MainActivity.this, R.string.split_missing_category, Toast.LENGTH_LONG).show();
+                    return;
+                }
+            }
+            List<ExpenseStore.Expense> all = store.expenses();
+            for (ExpenseStore.Expense current : all) {
+                if (!current.id.equals(original.id)) continue;
+                if (current.amount != original.amount || current.investment != original.investment
+                        || !current.toJson().optJSONArray("splits").toString().equals(original.toJson().optJSONArray("splits").toString())) {
+                    Toast.makeText(MainActivity.this, R.string.split_changed, Toast.LENGTH_LONG).show();
+                    return;
+                }
+                current.splits.clear();
+                Map<String, Long> allocations = new LinkedHashMap<>();
+                for (ExpenseSplitDraft.Part part : draft.parts) {
+                    long previous = allocations.containsKey(part.categoryId) ? allocations.get(part.categoryId) : 0;
+                    allocations.put(part.categoryId, previous + ExpenseSplitDraft.parseAmount(part.amount));
+                }
+                for (Map.Entry<String, Long> allocation : allocations.entrySet()) {
+                    current.splits.add(new ExpenseStore.Split(allocation.getKey(), allocation.getValue()));
+                }
+                store.saveExpenses(all);
+                ExpenseWidgetProvider.updateAll(MainActivity.this);
+                dialog.dismiss();
+                refreshVisibleExpenseScreen();
+                Toast.makeText(MainActivity.this, R.string.split_saved, Toast.LENGTH_SHORT).show();
+                return;
+            }
+            Toast.makeText(MainActivity.this, R.string.split_changed, Toast.LENGTH_LONG).show();
+        }
     }
 
     private void showAssignCategoryPicker(ExpenseStore.Expense expense, boolean dashboardAfterSave) {
@@ -817,7 +1052,7 @@ public class MainActivity extends Activity {
             row.setOnClickListener(v -> editCategory(c));
             root.addView(row);
         }
-        setContentView(wrap(root));
+        showScreenContent(wrap(root));
     }
 
     private void editCategory(ExpenseStore.Category category) {
@@ -981,7 +1216,7 @@ public class MainActivity extends Activity {
             visiblePeriods++;
         }
         if (visiblePeriods == 0) root.addView(subtitle(noExpensesLabel()));
-        setContentView(wrap(root));
+        showScreenContent(wrap(root));
     }
 
     private void showExpenseDetails(String label, long start, long end) {
@@ -1001,7 +1236,7 @@ public class MainActivity extends Activity {
                 addExpenseGroup(root, entry.getKey(), groupAmount(entry, totals), entry.getValue());
             }
         }
-        setContentView(wrap(root));
+        showScreenContent(wrap(root));
     }
 
     private String sortModeLabel() {
@@ -1128,6 +1363,19 @@ public class MainActivity extends Activity {
             deleteExpense.setBackground(rounded(accent2, dp(18), Color.TRANSPARENT, 0));
             itemActions.addView(deleteExpense);
             item.addView(itemActions);
+            TextView editSplit = dialogButton(getString(R.string.split_edit), false, () -> {
+                for (ExpenseStore.Expense expense : store.expenses()) {
+                    if (expense.id.equals(line.expenseId)) {
+                        showSplitDialog(expense);
+                        return;
+                    }
+                }
+                Toast.makeText(this, R.string.split_changed, Toast.LENGTH_LONG).show();
+            });
+            editSplit.setMinHeight(dp(48));
+            LinearLayout.LayoutParams editSplitParams = new LinearLayout.LayoutParams(-1, -2);
+            editSplitParams.topMargin = dp(8);
+            item.addView(editSplit, editSplitParams);
             details.addView(item);
         }
         card.addView(details);
@@ -1282,7 +1530,7 @@ public class MainActivity extends Activity {
             root.addView(subtitle(getString(R.string.sms_permission)));
             root.addView(option(fa ? "فعال کردن دسترسی پیامک" : "Allow SMS access", this::askSmsPermission));
         }
-        setContentView(wrap(root));
+        showScreenContent(wrap(root));
     }
 
     private void chooseBackupDestination() {
@@ -1413,10 +1661,22 @@ public class MainActivity extends Activity {
     }
 
     private void enterScreen(int screen) {
+        animateNextScreen = currentScreen != SCREEN_NONE && currentScreen != screen && !refreshingScreen;
+        nextScreenBackwards = navigatingBack || (replacingScreen
+                && (screen == SCREEN_DASHBOARD || screen == SCREEN_SETTINGS));
         if (!navigatingBack && !replacingScreen && currentScreen != SCREEN_NONE && currentScreen != screen) {
             backStack.add(currentScreen);
         }
         currentScreen = screen;
+    }
+
+    private void showScreenContent(View content) {
+        if (screenHost == null) {
+            screenHost = new ScreenTransitionHost(this);
+            setContentView(screenHost);
+        }
+        screenHost.show(content, animateNextScreen, nextScreenBackwards, fa, bg);
+        animateNextScreen = false;
     }
 
     private void showScreen(int screen) {
