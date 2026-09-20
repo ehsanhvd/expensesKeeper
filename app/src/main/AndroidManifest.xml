@@ -19,6 +19,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".SpendingPaceActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity" />
+
         <receiver
             android:name=".SmsExpenseReceiver"
             android:exported="true"

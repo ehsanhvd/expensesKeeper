@@ -2,7 +2,7 @@
     android:id="@+id/speed_widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/speed_widget_bg_green"
+    android:background="@drawable/speed_widget_bg_learning"
     android:clickable="true"
     android:contentDescription="@string/widget_spending_speed"
     android:gravity="center"
@@ -16,6 +16,7 @@
         android:gravity="center"
         android:includeFontPadding="false"
         android:maxLines="1"
+        android:ellipsize="end"
         android:text="@string/widget_spending_speed"
         android:textColor="#EFFFFFFF"
         android:textSize="10sp"
@@ -52,7 +53,7 @@
         android:gravity="center"
         android:includeFontPadding="false"
         android:maxLines="1"
-        android:text="@string/widget_daily_average_30"
+        android:text="@string/pace_keep_logging"
         android:textColor="#D9FFFFFF"
         android:textSize="9sp" />
 </LinearLayout>

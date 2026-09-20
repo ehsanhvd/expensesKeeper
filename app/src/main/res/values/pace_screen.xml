@@ -1,0 +1,31 @@
+<resources>
+    <string name="pace_screen_back">Back</string>
+    <string name="pace_screen_title">Your spending pace</string>
+    <string name="pace_screen_subtitle">Small steps. A little more breathing room.</string>
+    <string name="pace_screen_daily">per day · last 7 days</string>
+    <string name="pace_screen_learning">Getting to know your rhythm</string>
+    <string name="pace_screen_learning_hint">Every recorded expense helps fill in the picture.</string>
+    <string name="pace_screen_green_hint">A gentler pace. Enjoy the little win.</string>
+    <string name="pace_screen_steady_hint">Close to your usual rhythm. One small choice can make a difference.</string>
+    <string name="pace_screen_high_hint">A busy spending week? Take a breath and check what can wait.</string>
+    <string name="pace_screen_week">Your week at a glance</string>
+    <string name="pace_screen_recent">Spent in the last 7 days</string>
+    <string name="pace_screen_usual">Your usual week</string>
+    <string name="pace_screen_less">%1$s less than your usual week</string>
+    <string name="pace_screen_more">%1$s more than your usual week</string>
+    <string name="pace_screen_challenge">✦ A little challenge</string>
+    <string name="pace_screen_first_mission">First mission: record your expenses, even the little ones. Your personal goal will appear once there is enough history.</string>
+    <string name="pace_screen_goal">Try a %1$s week</string>
+    <string name="pace_screen_goal_met">Your latest week already meets this goal. Nice work — keep it comfortable.</string>
+    <string name="pace_screen_goal_gap">Your latest week is %1$s above this goal. Look for a small, optional expense to trim.</string>
+    <string name="pace_screen_goal_hint" formatted="false">A gentle goal: 5% below your usual week. It changes with your habits; this is not a spending allowance.</string>
+    <string name="pace_screen_tip">The 24-hour pause\nBefore your next nonessential purchase, give it a day. Still want it tomorrow?</string>
+    <string name="pace_screen_categories">Where your week went</string>
+    <string name="pace_screen_categories_hint">Your biggest categories. Start with something flexible — essentials come first.</string>
+    <string name="pace_screen_uncategorized">Uncategorized</string>
+    <string name="pace_screen_expenses">Open my expenses</string>
+    <string name="pace_screen_help">How to read your pace ＋</string>
+    <string name="pace_screen_help_close">How to read your pace −</string>
+    <string name="pace_screen_help_learning">Your daily amount includes everything recorded in the last 7 days.\n\nKeep logging consistently. After at least 5 weeks of history, including earlier spending, there should be enough to discover your usual pace. Until then, the needle stays neutral.\n\nInvestments and excluded category shares do not count.</string>
+    <string name="pace_screen_help_detail" formatted="false">Your pace compares the last 7 days with your usual week from the preceding 4–8 weeks. New expenses count as soon as they are recorded.\n\nMint: at least 5% below usual.\nAmber: near usual, up to just under 15% higher.\nCoral: 15% higher or more.\n\nBills and big purchases can move the needle. This is a guide to your habits, not a judgment or a measure of what you can afford. Missing entries can make the pace look lower. Investments and excluded category shares do not count.</string>
+</resources>

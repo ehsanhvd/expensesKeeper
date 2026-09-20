@@ -17,10 +17,74 @@ import android.widget.RemoteViews;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.util.Locale;
+import java.util.Calendar;
+import java.util.Set;
 
 public class SpendingSpeedWidgetProvider extends AppWidgetProvider {
-    private static final long DAY_MS = 24L * 60L * 60L * 1000L;
-    private static final long WINDOW_MS = 30L * DAY_MS;
+    static final String EXTRA_PACE = "com.codex.expensekeeper.SPENDING_PACE";
+
+    static SpendingPace pace(ExpenseStore store, long now) {
+        long[] boundaries = new long[64];
+        long[] days = new long[63];
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTimeInMillis(now);
+        for (int i = 0; i < boundaries.length; i++) {
+            boundaries[i] = calendar.getTimeInMillis();
+            calendar.add(Calendar.DAY_OF_YEAR, -1);
+        }
+        long oldest = now;
+        Set<String> excluded = store.excludedCategoryIds();
+        for (ExpenseStore.Expense expense : store.expenses()) {
+            if (expense.investment || expense.time > now) continue;
+            long amount = expense.splits.isEmpty() ? expense.amount : 0;
+            for (ExpenseStore.Split split : expense.splits) {
+                if (!excluded.contains(split.categoryId)) amount += split.amount;
+            }
+            if (amount <= 0) continue;
+            oldest = Math.min(oldest, expense.time);
+            for (int i = 0; i < days.length; i++) {
+                if (expense.time > boundaries[i + 1] && expense.time <= boundaries[i]) {
+                    days[i] += amount;
+                    break;
+                }
+            }
+        }
+        int historyDays = 0;
+        while (historyDays < 63 && oldest <= boundaries[historyDays + 1]) historyDays++;
+        return new SpendingPace(days, historyDays);
+    }
+
+    static String status(Context context, SpendingPace pace) {
+        int label = pace.state == SpendingPace.LEARNING ? R.string.pace_learning
+                : pace.state == SpendingPace.GREEN ? R.string.pace_green
+                : pace.state == SpendingPace.HIGH ? R.string.pace_high : R.string.pace_steady;
+        return context.getString(label);
+    }
+
+    static String comparison(Context context, SpendingPace pace, boolean fa) {
+        if (pace.state == SpendingPace.LEARNING) return context.getString(R.string.pace_keep_logging);
+        String percent = String.valueOf(pace.percentChange());
+        if (fa) percent = ExpenseStore.toPersianDigits(percent);
+        return context.getString(pace.dailyAverage <= pace.usualDaily
+                ? R.string.pace_below : R.string.pace_above, percent);
+    }
+
+    static String explanation(Context context, ExpenseStore store) {
+        SpendingPace pace = pace(store, System.currentTimeMillis());
+        boolean fa = "fa".equals(store.language());
+        String message = status(context, pace) + "\n" + comparison(context, pace, fa)
+                + "\n\n" + context.getString(R.string.pace_recent,
+                ExpenseStore.money(Math.round(pace.dailyAverage), fa));
+        if (pace.state != SpendingPace.LEARNING) {
+            message += "\n" + context.getString(R.string.pace_usual,
+                    ExpenseStore.money(Math.round(pace.usualDaily), fa),
+                    fa ? ExpenseStore.toPersianDigits(String.valueOf(pace.baselineWeeks)) : String.valueOf(pace.baselineWeeks))
+                    + "\n\n" + context.getString(R.string.pace_target,
+                    ExpenseStore.money(Math.round(pace.usualDaily * 7 * .95), fa));
+        }
+        return message + "\n\n" + context.getString(pace.state == SpendingPace.LEARNING
+                ? R.string.pace_learning_detail : R.string.pace_detail);
+    }
 
     @Override
     public void onUpdate(Context context, AppWidgetManager manager, int[] ids) {
@@ -39,25 +103,19 @@ public class SpendingSpeedWidgetProvider extends AppWidgetProvider {
         Configuration configuration = new Configuration(context.getResources().getConfiguration());
         configuration.setLocale(new Locale(store.language()));
         Context localizedContext = context.createConfigurationContext(configuration);
-        long now = System.currentTimeMillis();
-        long currentTotal = store.totalBetween(now - WINDOW_MS, now);
-        long previousTotal = store.totalBetween(now - (2L * WINDOW_MS), now - WINDOW_MS);
-        long dailyAverage = Math.round(currentTotal / 30.0d);
-        double previousDailyAverage = previousTotal / 30.0d;
-        float speed = speed(dailyAverage, previousDailyAverage);
-        int state = state(speed);
+        SpendingPace pace = pace(store, System.currentTimeMillis());
 
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.spending_speed_widget);
-        views.setInt(R.id.speed_widget_root, "setBackgroundResource", backgroundFor(state));
-        views.setImageViewBitmap(R.id.speed_widget_gauge, drawGauge(speed));
-        views.setTextViewText(R.id.speed_widget_title, localizedContext.getString(R.string.widget_spending_speed));
-        views.setTextViewText(R.id.speed_widget_value, compactAmount(dailyAverage, fa));
-        views.setTextViewText(R.id.speed_widget_caption, localizedContext.getString(R.string.widget_daily_average_30));
+        views.setInt(R.id.speed_widget_root, "setBackgroundResource", backgroundFor(pace.state));
+        views.setImageViewBitmap(R.id.speed_widget_gauge, drawGauge(pace.needle, pace.state == SpendingPace.LEARNING));
+        views.setTextViewText(R.id.speed_widget_title, status(localizedContext, pace));
+        views.setTextViewText(R.id.speed_widget_value, localizedContext.getString(R.string.pace_per_day,
+                compactAmount(Math.round(pace.dailyAverage), fa)));
+        views.setTextViewText(R.id.speed_widget_caption, comparison(localizedContext, pace, fa));
         views.setContentDescription(R.id.speed_widget_root,
-                localizedContext.getString(R.string.widget_speed_description, ExpenseStore.money(dailyAverage, fa)));
+                explanation(localizedContext, store));
 
-        Intent launch = new Intent(context, MainActivity.class);
-        launch.putExtra(MainActivity.EXTRA_FROM_WIDGET, true);
+        Intent launch = new Intent(context, SpendingPaceActivity.class);
         launch.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         PendingIntent pendingIntent = PendingIntent.getActivity(context, 10000 + id, launch,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
@@ -65,25 +123,14 @@ public class SpendingSpeedWidgetProvider extends AppWidgetProvider {
         manager.updateAppWidget(id, views);
     }
 
-    private static float speed(long currentDailyAverage, double previousDailyAverage) {
-        if (currentDailyAverage <= 0) return 0f;
-        if (previousDailyAverage <= 0) return 1f;
-        return clamp((float) (currentDailyAverage / (previousDailyAverage * 2.0d)));
-    }
-
-    private static int state(float speed) {
-        if (speed < 0.425f) return 0;
-        if (speed < 0.575f) return 1;
-        return 2;
-    }
-
     private static int backgroundFor(int state) {
+        if (state == SpendingPace.LEARNING) return R.drawable.speed_widget_bg_learning;
         if (state == 0) return R.drawable.speed_widget_bg_green;
         if (state == 1) return R.drawable.speed_widget_bg_yellow;
         return R.drawable.speed_widget_bg_red;
     }
 
-    private static Bitmap drawGauge(float speed) {
+    private static Bitmap drawGauge(float speed, boolean learning) {
         int width = 360;
         int height = 174;
         Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
@@ -96,9 +143,9 @@ public class SpendingSpeedWidgetProvider extends AppWidgetProvider {
 
         paint.setColor(Color.argb(45, 255, 255, 255));
         canvas.drawArc(arc, 180f, 180f, false, paint);
-        drawSegment(canvas, paint, arc, 180f, 54f, Color.rgb(91, 231, 160));
-        drawSegment(canvas, paint, arc, 243f, 54f, Color.rgb(255, 214, 92));
-        drawSegment(canvas, paint, arc, 306f, 54f, Color.rgb(255, 116, 129));
+        drawSegment(canvas, paint, arc, 180f, 57f, learning ? Color.LTGRAY : Color.rgb(91, 231, 160));
+        drawSegment(canvas, paint, arc, 241.5f, 57f, learning ? Color.LTGRAY : Color.rgb(255, 214, 92));
+        drawSegment(canvas, paint, arc, 303f, 57f, learning ? Color.LTGRAY : Color.rgb(255, 116, 129));
 
         float centerX = width / 2f;
         float centerY = height - 9f;

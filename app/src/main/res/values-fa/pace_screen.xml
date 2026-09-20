@@ -1,0 +1,31 @@
+<resources>
+    <string name="pace_screen_back">بازگشت</string>
+    <string name="pace_screen_title">ریتم خرج شما</string>
+    <string name="pace_screen_subtitle">قدم‌های کوچک، خیال کمی آسوده‌تر.</string>
+    <string name="pace_screen_daily">در روز · ۷ روز اخیر</string>
+    <string name="pace_screen_learning">داریم ریتمت رو می‌شناسیم</string>
+    <string name="pace_screen_learning_hint">هر خرجی که ثبت کنی، تصویر روشن‌تر می‌شه.</string>
+    <string name="pace_screen_green_hint">ریتم آروم‌تر شده. از این برد کوچیک لذت ببر.</string>
+    <string name="pace_screen_steady_hint">نزدیک ریتم همیشگی هستی. یک انتخاب کوچیک هم اثر داره.</string>
+    <string name="pace_screen_high_hint">هفته پرخرجی بود؟ نفسی بکش و ببین چی می‌تونه صبر کنه.</string>
+    <string name="pace_screen_week">هفته‌ات در یک نگاه</string>
+    <string name="pace_screen_recent">خرج ۷ روز اخیر</string>
+    <string name="pace_screen_usual">یک هفته معمول شما</string>
+    <string name="pace_screen_less">%1$s کمتر از هفته معمول شما</string>
+    <string name="pace_screen_more">%1$s بیشتر از هفته معمول شما</string>
+    <string name="pace_screen_challenge">✦ یک چالش کوچیک</string>
+    <string name="pace_screen_first_mission">ماموریت اول: خرج‌ها رو ثبت کن، حتی کوچیک‌ها رو. وقتی سابقه کافی داشته باشی، هدف مخصوص خودت اینجا ظاهر می‌شه.</string>
+    <string name="pace_screen_goal">یک هفته با %1$s</string>
+    <string name="pace_screen_goal_met">هفته اخیرت همین حالا هم به این هدف رسیده. آفرین؛ با آرامش ادامه بده.</string>
+    <string name="pace_screen_goal_gap">خرج هفته اخیرت %1$s بالاتر از این هدفه. یک خرج کوچیک و غیرضروری برای کم کردن پیدا کن.</string>
+    <string name="pace_screen_goal_hint">هدف ملایم: ۵٪ کمتر از هفته معمول شما. با عادت‌هایت تغییر می‌کند و به معنی مجوز خرج کردن نیست.</string>
+    <string name="pace_screen_tip">مکث ۲۴ ساعته\nقبل از خرید غیرضروری بعدی، یک روز به خودت فرصت بده. فردا هم هنوز می‌خوایش؟</string>
+    <string name="pace_screen_categories">خرج هفته کجا رفت؟</string>
+    <string name="pace_screen_categories_hint">بزرگ‌ترین دسته‌های خرجت. از چیزی شروع کن که قابل کم کردنه؛ نیازهای ضروری اولویت دارن.</string>
+    <string name="pace_screen_uncategorized">بدون دسته</string>
+    <string name="pace_screen_expenses">دیدن خرج‌هایم</string>
+    <string name="pace_screen_help">راهنمای ریتم خرج ＋</string>
+    <string name="pace_screen_help_close">راهنمای ریتم خرج −</string>
+    <string name="pace_screen_help_learning">عدد روزانه، همه خرج‌های ثبت‌شده در ۷ روز اخیر را شامل می‌شود.\n\nخرج‌ها را مرتب ثبت کن. پس از حداقل ۵ هفته سابقه، با وجود خرج‌های قبل از هفته اخیر، معمولاً اطلاعات کافی برای شناخت ریتمت داریم. تا آن زمان عقربه خنثی می‌ماند.\n\nسرمایه‌گذاری‌ها و سهم دسته‌های مستثنا حساب نمی‌شوند.</string>
+    <string name="pace_screen_help_detail">ریتم خرج، ۷ روز اخیر را با یک هفته معمول شما در ۴ تا ۸ هفته قبل از آن مقایسه می‌کند. خرج‌های تازه به‌محض ثبت حساب می‌شوند.\n\nسبز نعنایی: حداقل ۵٪ کمتر از معمول.\nکهربایی: نزدیک معمول، با افزایش کمتر از ۱۵٪.\nمرجانی: افزایش ۱۵٪ یا بیشتر.\n\nقبض‌ها و خریدهای بزرگ ممکن است عقربه را جابه‌جا کنند. این راهنمای عادت‌های توست، نه قضاوت یا سنجش توان مالی‌ات. خرج‌های ثبت‌نشده ممکن است ریتم را کمتر نشان دهند. سرمایه‌گذاری‌ها و سهم دسته‌های مستثنا حساب نمی‌شوند.</string>
+</resources>

@@ -29,9 +29,20 @@
     <string name="share_app_prompt">Share app</string>
     <string name="share_app_message">Take control of your spending with %1$s — a simple way to track expenses and stay organized. Try it today!\n%2$s</string>
     <string name="widget_spending_speed">SPEND SPEED</string>
-    <string name="widget_daily_average_30">avg/day · 30 days</string>
-    <string name="widget_speed_picker_description">30-day daily spending speedometer</string>
-    <string name="widget_speed_description">Spending speed: %1$s average per day over the last 30 days</string>
+    <string name="pace_per_day">%1$s/day</string>
+    <string name="widget_speed_picker_description">Live weekly spending pace, encouragement and a small reduction goal. Tap for details.</string>
+    <string name="pace_learning">LEARNING…</string>
+    <string name="pace_green">NICE &amp; EASY ✨</string>
+    <string name="pace_steady">CRUISING ALONG</string>
+    <string name="pace_high">EASE THE PACE</string>
+    <string name="pace_keep_logging">Keep logging · tap for info</string>
+    <string name="pace_below">%1$s%% below usual</string>
+    <string name="pace_above">%1$s%% above usual</string>
+    <string name="pace_recent">Last 7 days: %1$s per day</string>
+    <string name="pace_usual">Usual: %1$s per day across the preceding %2$s weeks</string>
+    <string name="pace_target">Small challenge: aim for %1$s or less over 7 days — 5%% below your usual spending. Try delaying one optional purchase.</string>
+    <string name="pace_learning_detail">Keep recording expenses consistently. The meter needs at least 5 weeks of history, including spending before the latest week, to compare fairly. The number is your recorded spending over the last 7 days divided by 7.</string>
+    <string name="pace_detail" formatted="false">The number is your daily average over the last 7 days, including recent purchases. Your usual pace uses 4–8 complete weeks before that. Green means at least 5% lower; amber means less than 15% higher; coral means 15% higher or more.\n\nThis compares recorded spending, not affordability. Bills and large purchases count too; higher spending may be necessary. Missing entries can make the meter look better. Investments and excluded category splits are left out. The challenge updates with your usual pace; it is not a fixed budget.</string>
     <string name="backup_restore">Backup and restore</string>
     <string name="backup_data">Create backup</string>
     <string name="restore_data">Restore backup</string>
